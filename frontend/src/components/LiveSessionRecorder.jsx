@@ -1,431 +1,391 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Mic, Square, CheckCircle2, AlertCircle, ArrowRight, RotateCcw, Activity, Disc, Radio } from "lucide-react";
+import { Mic, Square, Check, ArrowRight, Play, RotateCcw, AlertCircle, Info, Sparkles } from "lucide-react";
+import AudioVisualizer3D from "./AudioVisualizer3D";
+import Card3D from "./Card3D";
 
-const BASELINE_QUESTIONS = [
-  "1. State your full name and current location.",
-  "2. Describe what you had to eat or drink today in a relaxed voice.",
-  "3. Count slowly from 1 to 10 in a natural, conversational tone.",
+const BASELINE_PROMPTS = [
+  "State your full name and what city or town you are currently in.",
+  "Describe what you had for breakfast or lunch today in a calm, normal tone.",
+  "Count from one to ten at a steady, conversational pace.",
 ];
 
-export default function LiveSessionRecorder({ onSessionReady, isAnalyzing }) {
-  const [step, setStep] = useState("baseline"); // 'baseline' | 'test'
-  const [isRecording, setIsRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [baselineBlob, setBaselineBlob] = useState(null);
-  const [baselineDuration, setBaselineDuration] = useState(0);
-  const [micError, setMicError] = useState(null);
-  const [customPrompt, setCustomPrompt] = useState("Did you tell the full truth about the matter in question?");
+export default function LiveSessionRecorder({ onAnalyze, isLoading }) {
+  // Step 1 = Calibration baseline, Step 2 = Test response
+  const [step, setStep] = useState(1);
+  const [promptIndex, setPromptIndex] = useState(0);
 
+  // Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // Stored audio blobs
+  const [baselineBlob, setBaselineBlob] = useState(null);
+  const [testBlob, setTestBlob] = useState(null);
+  const [baselineUrl, setBaselineUrl] = useState(null);
+  const [testUrl, setTestUrl] = useState(null);
+
+  // Media references
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const timerRef = useRef(null);
+  const timerIntervalRef = useRef(null);
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
-  const canvasRef = useRef(null);
-  const animationFrameRef = useRef(null);
+  const streamRef = useRef(null);
 
+  // Audio cleanup on unmount
   useEffect(() => {
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
       if (audioContextRef.current && audioContextRef.current.state !== "closed") {
         audioContextRef.current.close();
       }
     };
   }, []);
 
-  // Oscilloscope & Spectrum Analyzer Canvas Renderer
-  const drawWaveform = () => {
-    if (!analyserRef.current || !canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const analyser = analyserRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    const timeDomainArray = new Uint8Array(bufferLength);
-
-    const render = () => {
-      animationFrameRef.current = requestAnimationFrame(render);
-      analyser.getByteFrequencyData(dataArray);
-      analyser.getByteTimeDomainData(timeDomainArray);
-
-      // Dark background with subtle scanlines
-      ctx.fillStyle = "rgba(7, 8, 11, 0.4)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw Grid Lines
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let x = 0; x < canvas.width; x += 40) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-      }
-      for (let y = 0; y < canvas.height; y += 30) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-      }
-      ctx.stroke();
-
-      // 1. Draw Spectrum Bars in the background
-      const barWidth = (canvas.width / bufferLength) * 1.8;
-      let barX = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * (canvas.height * 0.75);
-        const barGradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
-        
-        if (step === "baseline") {
-          barGradient.addColorStop(0, "rgba(0, 245, 155, 0.1)");
-          barGradient.addColorStop(1, "rgba(0, 229, 255, 0.5)");
-        } else {
-          barGradient.addColorStop(0, "rgba(255, 183, 3, 0.1)");
-          barGradient.addColorStop(1, "rgba(255, 51, 102, 0.5)");
-        }
-
-        ctx.fillStyle = barGradient;
-        ctx.fillRect(barX, canvas.height - barHeight, barWidth - 1, barHeight);
-        barX += barWidth;
-      }
-
-      // 2. Draw Oscilloscope Time-Domain Waveform on top
-      ctx.lineWidth = 2.5;
-      if (step === "baseline") {
-        ctx.strokeStyle = "#00f59b";
-        ctx.shadowColor = "#00f59b";
-      } else {
-        ctx.strokeStyle = "#ffb703";
-        ctx.shadowColor = "#ffb703";
-      }
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-
-      const sliceWidth = canvas.width / bufferLength;
-      let x = 0;
-
-      for (let i = 0; i < bufferLength; i++) {
-        const v = timeDomainArray[i] / 128.0;
-        const y = (v * canvas.height) / 2;
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-        x += sliceWidth;
-      }
-
-      ctx.lineTo(canvas.width, canvas.height / 2);
-      ctx.stroke();
-      ctx.shadowBlur = 0; // reset
-    };
-
-    render();
-  };
-
   const startRecording = async () => {
-    setMicError(null);
-    setDuration(0);
+    setErrorMsg("");
     audioChunksRef.current = [];
+    setElapsedSeconds(0);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          channelCount: 1,
+          sampleRate: 16000,
           echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: true,
+          noiseSuppression: true,
         },
       });
+      streamRef.current = stream;
 
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const audioCtx = new AudioCtx();
+      // Setup Web Audio Analyser for 3D Visualizer
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 128;
-      const source = audioCtx.createMediaStreamSource(stream);
       source.connect(analyser);
 
       audioContextRef.current = audioCtx;
       analyserRef.current = analyser;
 
-      const mimeTypes = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/ogg;codecs=opus",
-        "audio/wav",
-      ];
-      const selectedMime = mimeTypes.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      // Setup MediaRecorder
+      const options = { mimeType: "audio/webm" };
+      let mediaRecorder;
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        mediaRecorder = new MediaRecorder(stream, options);
+      } else {
+        mediaRecorder = new MediaRecorder(stream);
+      }
 
-      const recorder = new MediaRecorder(stream, selectedMime ? { mimeType: selectedMime } : {});
-
-      recorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
       };
 
-      recorder.onstop = () => {
-        const mimeType = recorder.mimeType || "audio/webm";
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const url = URL.createObjectURL(audioBlob);
 
-        stream.getTracks().forEach((track) => track.stop());
-        if (audioCtx.state !== "closed") audioCtx.close();
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-
-        if (step === "baseline") {
-          setBaselineBlob(blob);
-          setBaselineDuration(duration);
-          setIsRecording(false);
-          setStep("test");
+        if (step === 1) {
+          setBaselineBlob(audioBlob);
+          setBaselineUrl(url);
         } else {
-          setIsRecording(false);
-          if (baselineBlob) {
-            onSessionReady(baselineBlob, blob);
-          }
+          setTestBlob(audioBlob);
+          setTestUrl(url);
+        }
+
+        // Clean up tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
         }
       };
 
-      mediaRecorderRef.current = recorder;
-      recorder.start(200);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(100);
       setIsRecording(true);
 
       const startTime = Date.now();
-      timerRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        setDuration(elapsed);
+      timerIntervalRef.current = setInterval(() => {
+        const seconds = Math.floor((Date.now() - startTime) / 1000);
+        setElapsedSeconds(seconds);
 
-        if (elapsed >= 60.0) {
+        // Auto-stop at 60s
+        if (seconds >= 60) {
           stopRecording();
         }
-      }, 100);
-
-      drawWaveform();
+      }, 250);
     } catch (err) {
       console.error("Microphone access error:", err);
-      setMicError(
-        "Could not access microphone. Please ensure microphone permissions are granted in your browser."
+      setErrorMsg(
+        "Could not access your microphone. Please allow microphone permissions in your browser."
       );
     }
   };
 
   const stopRecording = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+
+    if (elapsedSeconds < 5) {
+      setErrorMsg("Recording must be at least 5 seconds long to extract reliable acoustics.");
     }
   };
 
-  const handleRestart = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
+  const proceedToTest = () => {
+    if (!baselineBlob || elapsedSeconds < 5) {
+      setErrorMsg("Please record at least 5 seconds for calibration before continuing.");
+      return;
     }
-    setStep("baseline");
+    setErrorMsg("");
+    setStep(2);
+    setElapsedSeconds(0);
+  };
+
+  const handleReset = () => {
+    setStep(1);
     setBaselineBlob(null);
-    setBaselineDuration(0);
-    setDuration(0);
-    setIsRecording(false);
+    setTestBlob(null);
+    setBaselineUrl(null);
+    setTestUrl(null);
+    setElapsedSeconds(0);
+    setErrorMsg("");
   };
 
-  const isMinDurationMet = duration >= 5.0;
-  const progressPct = Math.min(100, (duration / 60) * 100);
+  const handleSubmit = () => {
+    if (!baselineBlob || !testBlob) {
+      setErrorMsg("Both baseline and test recordings are required.");
+      return;
+    }
+    onAnalyze(baselineBlob, testBlob);
+  };
+
+  const isMinTimeMet = elapsedSeconds >= 5;
 
   return (
-    <div className="bg-dark-900/90 border border-dark-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden backdrop-blur-xl">
-      {micError && (
-        <div className="mb-6 p-4 bg-neon-coral/10 border border-neon-coral/30 rounded-2xl flex items-start gap-3 text-sm text-neon-coral">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <p>{micError}</p>
-        </div>
-      )}
-
-      {/* Hardware Studio Stepper Header */}
-      <div className="flex items-center justify-between mb-7 pb-4 border-b border-dark-800">
-        <div className="flex items-center space-x-3">
-          <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center font-mono font-bold text-xs transition-all ${
-              step === "baseline"
-                ? "bg-neon-mint text-dark-950 shadow-[0_0_15px_rgba(0,245,155,0.5)] scale-105"
-                : "bg-dark-800 text-neon-mint border border-neon-mint/30"
-            }`}
-          >
-            {baselineBlob ? <CheckCircle2 className="w-4 h-4" /> : "01"}
-          </div>
-          <div>
-            <p className="text-xs font-mono font-bold text-white tracking-wide">PHASE 1: CALIBRATION</p>
-            <p className="text-[11px] font-mono text-dark-500">Resting Vocal Profile (~15s)</p>
-          </div>
-        </div>
-
-        <ArrowRight className="w-4 h-4 text-dark-600 hidden sm:block" />
-
-        <div className="flex items-center space-x-3">
-          <div
-            className={`w-9 h-9 rounded-xl flex items-center justify-center font-mono font-bold text-xs transition-all ${
-              step === "test"
-                ? "bg-neon-amber text-dark-950 shadow-[0_0_15px_rgba(255,183,3,0.5)] scale-105"
-                : "bg-dark-800 text-dark-500 border border-dark-700"
-            }`}
-          >
-            02
-          </div>
-          <div>
-            <p className="text-xs font-mono font-bold text-white tracking-wide">PHASE 2: TEST INQUIRY</p>
-            <p className="text-[11px] font-mono text-dark-500">Target Statement & Auto-Submit</p>
-          </div>
-        </div>
-
-        {baselineBlob && (
-          <button
-            onClick={handleRestart}
-            disabled={isRecording || isAnalyzing}
-            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 text-dark-500 hover:text-white text-xs font-mono transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">RESET</span>
-          </button>
-        )}
-      </div>
-
-      {/* Calibration Questions vs Target Statement Card */}
-      {step === "baseline" ? (
-        <div className="mb-6 space-y-3">
-          <div className="p-4 bg-dark-850/80 border border-neon-mint/30 rounded-2xl relative overflow-hidden">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-neon-mint flex items-center gap-1.5">
-                <Radio className="w-3.5 h-3.5 text-neon-mint animate-pulse" />
-                CALIBRATION SCRIPT // READ IN RELAXED VOICE
-              </span>
-              <span className="text-[10px] font-mono text-dark-500">MIN 5.0s</span>
-            </div>
-            <ul className="text-xs sm:text-sm text-slate-200 space-y-1.5 font-medium">
-              {BASELINE_QUESTIONS.map((q, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="text-neon-mint font-mono font-bold">&gt;</span>
-                  <span>{q}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-6 space-y-3">
-          <div className="p-4 bg-dark-850/80 border border-neon-amber/30 rounded-2xl relative overflow-hidden">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-neon-amber flex items-center gap-1.5">
-                <Disc className="w-3.5 h-3.5 text-neon-amber animate-spin" />
-                TARGET INQUIRY RESPONSE
-              </span>
-              <span className="text-[10px] font-mono text-neon-mint font-semibold flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                CALIB LOCKED ({baselineDuration.toFixed(1)}s)
-              </span>
-            </div>
-            <p className="text-sm sm:text-base font-bold text-white mb-2 font-mono">
-              "{customPrompt}"
-            </p>
-            <p className="text-xs text-dark-500">
-              Deliver your response. When you click <strong>STOP</strong>, it will automatically compute the acoustic delta vector and render the verdict!
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Real-Time Oscilloscope Waveform & Frequency Canvas */}
-      <div className="relative mb-6 rounded-2xl bg-dark-950 border border-dark-800 overflow-hidden h-40 flex flex-col items-center justify-center p-3 shadow-inner">
-        {isRecording ? (
-          <>
-            <canvas ref={canvasRef} width="500" height="140" className="w-full h-full" />
-            <div className="absolute top-3 left-4 flex items-center space-x-2 bg-dark-900/90 px-2.5 py-1 rounded-lg border border-dark-700">
-              <span className="w-2 h-2 rounded-full bg-neon-coral animate-ping" />
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-neon-coral">
-                {step === "baseline" ? "CALIBRATING DSP" : "ANALYZING TARGET"}
-              </span>
-            </div>
-            <div className="absolute bottom-3 right-4 font-mono text-lg font-bold text-white bg-dark-900/90 px-3 py-1 rounded-xl border border-dark-700 shadow-lg">
-              {duration.toFixed(1)}s <span className="text-xs text-dark-500">/ 60.0s</span>
-            </div>
-          </>
-        ) : (
-          <div className="text-center text-dark-500 space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-dark-850 border border-dark-700 flex items-center justify-center mx-auto text-neon-mint shadow-lg">
-              <Activity className="w-6 h-6 animate-pulse" />
-            </div>
-            <p className="text-xs font-mono font-bold text-slate-200">
-              {step === "baseline"
-                ? "ACOUSTIC WORKSTATION READY"
-                : "CALIBRATION STORED // READY FOR TEST INQUIRY"}
-            </p>
-            <p className="text-[11px] font-mono text-dark-500">
-              {step === "baseline"
-                ? "Click START and read the 3 calibration questions in a natural tone."
-                : "Click START, answer the inquiry, and click STOP to evaluate."}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Progress & Timing Bar */}
-      {isRecording && (
-        <div className="mb-6 space-y-1.5 font-mono">
-          <div className="flex justify-between text-xs">
-            <span className={isMinDurationMet ? "text-neon-mint font-bold" : "text-neon-amber"}>
-              {isMinDurationMet
-                ? step === "baseline"
-                  ? "✓ MIN 5.0s MET // CLICK STOP WHEN DONE SCRIPT"
-                  : "✓ MIN 5.0s MET // CLICK STOP TO AUTO-ANALYZE"
-                : `RECORDING... (${(5.0 - duration).toFixed(1)}s UNTIL MINIMUM)`}
+    <div className="space-y-6">
+      {/* Step Progression Bar */}
+      <div className="grid grid-cols-2 gap-3">
+        <div
+          className={`p-4 rounded-2xl border transition-all ${
+            step === 1
+              ? "bg-studio-800/80 border-accent-emerald/40 shadow-glow-emerald"
+              : baselineBlob
+              ? "bg-studio-900/60 border-studio-700 text-studio-400"
+              : "bg-studio-950/40 border-studio-850 opacity-50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-accent-emerald uppercase tracking-wider">
+              Step 1 of 2
             </span>
-            <span className="text-slate-400">{duration.toFixed(1)}s</span>
+            {baselineBlob && <Check className="w-4 h-4 text-accent-emerald" />}
           </div>
-          <div className="h-2 w-full bg-dark-950 rounded-full overflow-hidden p-0.5 border border-dark-800">
+          <p className="text-sm font-bold text-white mt-1">Neutral Calibration</p>
+          <p className="text-xs text-studio-400 mt-0.5">Establishes your acoustic baseline</p>
+        </div>
+
+        <div
+          className={`p-4 rounded-2xl border transition-all ${
+            step === 2
+              ? "bg-studio-800/80 border-accent-amber/40 shadow-glow-amber"
+              : testBlob
+              ? "bg-studio-900/60 border-studio-700 text-studio-400"
+              : "bg-studio-950/40 border-studio-850 opacity-50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-accent-amber uppercase tracking-wider">
+              Step 2 of 2
+            </span>
+            {testBlob && <Check className="w-4 h-4 text-accent-amber" />}
+          </div>
+          <p className="text-sm font-bold text-white mt-1">Statement Analysis</p>
+          <p className="text-xs text-studio-400 mt-0.5">Tested for differential stress shift</p>
+        </div>
+      </div>
+
+      {/* Main Studio Card */}
+      <Card3D depth={8} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+        {/* Step Header & Prompt */}
+        <div className="border-b border-studio-800 pb-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-studio-400 uppercase tracking-wider">
+              {step === 1 ? "Calibration Guidance" : "Test Statement Prompt"}
+            </span>
+            {step === 1 && (
+              <button
+                type="button"
+                onClick={() => setPromptIndex((prev) => (prev + 1) % BASELINE_PROMPTS.length)}
+                className="text-xs text-accent-teal hover:underline flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Change Prompt
+              </button>
+            )}
+          </div>
+
+          <p className="text-lg sm:text-xl font-bold text-white leading-snug">
+            {step === 1
+              ? `"${BASELINE_PROMPTS[promptIndex]}"`
+              : "Speak your statement or answer the target question clearly into your microphone."}
+          </p>
+
+          <p className="text-xs text-studio-400 mt-2">
+            {step === 1
+              ? "Speak at your natural pace and volume for 5–15 seconds to establish an accurate personal baseline."
+              : "State the claim or answer for 5–30 seconds. The model calculates the differential acoustic shift against your baseline."}
+          </p>
+        </div>
+
+        {/* 3D Acoustic Waveform Visualizer */}
+        <div className="relative h-44 rounded-2xl bg-studio-950 border border-studio-800/80 overflow-hidden flex flex-col items-center justify-center">
+          <AudioVisualizer3D
+            analyserNode={analyserRef.current}
+            isRecording={isRecording}
+            mode={step === 1 ? "baseline" : "test"}
+          />
+
+          {/* Recording Timer & Status Overlay */}
+          <div className="absolute top-3 left-4 flex items-center space-x-2 bg-studio-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
             <div
-              className={`h-full rounded-full transition-all duration-100 ${
-                isMinDurationMet ? "bg-neon-mint" : "bg-neon-amber"
+              className={`w-2.5 h-2.5 rounded-full ${
+                isRecording
+                  ? "bg-accent-rose animate-ping"
+                  : (step === 1 ? baselineBlob : testBlob)
+                  ? "bg-accent-emerald"
+                  : "bg-studio-500"
               }`}
-              style={{ width: `${progressPct}%` }}
+            />
+            <span className="text-xs font-mono font-bold text-white">
+              {isRecording
+                ? `Recording: ${elapsedSeconds}s (Min 5s)`
+                : (step === 1 ? baselineBlob : testBlob)
+                ? `Recorded: ${elapsedSeconds}s`
+                : "Microphone Ready"}
+            </span>
+          </div>
+
+          {!isRecording && !(step === 1 ? baselineBlob : testBlob) && (
+            <p className="absolute bottom-4 text-xs text-studio-400 pointer-events-none">
+              Click Start Recording below to begin
+            </p>
+          )}
+        </div>
+
+        {/* Playback preview if recorded */}
+        {((step === 1 && baselineUrl) || (step === 2 && testUrl)) && !isRecording && (
+          <div className="p-3 bg-studio-900/60 rounded-xl border border-studio-800 flex items-center justify-between">
+            <span className="text-xs text-studio-300 font-medium">Review Audio Clip:</span>
+            <audio
+              src={step === 1 ? baselineUrl : testUrl}
+              controls
+              className="h-8 max-w-[280px]"
             />
           </div>
-        </div>
-      )}
-
-      {/* Tactical Hardware Buttons */}
-      <div className="flex items-center justify-center gap-4">
-        {!isRecording ? (
-          <button
-            onClick={startRecording}
-            disabled={isAnalyzing}
-            className={`flex items-center space-x-2.5 px-7 py-4 font-mono font-bold rounded-2xl text-xs uppercase tracking-wider transition-all transform hover:scale-[1.02] active:scale-95 shadow-xl ${
-              step === "baseline"
-                ? "bg-neon-mint hover:bg-neon-mint/90 text-dark-950 shadow-neon-mint/20"
-                : "bg-neon-amber hover:bg-neon-amber/90 text-dark-950 shadow-neon-amber/20"
-            }`}
-          >
-            <Mic className="w-4 h-4" />
-            <span>
-              {step === "baseline" ? "START CALIBRATION CAPTURE" : "START TEST INQUIRY CAPTURE"}
-            </span>
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            disabled={!isMinDurationMet}
-            className={`flex items-center space-x-2.5 px-7 py-4 font-mono font-bold rounded-2xl text-xs uppercase tracking-wider transition-all shadow-xl ${
-              isMinDurationMet
-                ? "bg-neon-coral hover:bg-neon-coral/90 text-white shadow-neon-coral/25 cursor-pointer transform hover:scale-[1.02] active:scale-95"
-                : "bg-dark-800 text-dark-500 cursor-not-allowed border border-dark-700"
-            }`}
-          >
-            <Square className="w-4 h-4 fill-current" />
-            <span>
-              {isMinDurationMet
-                ? step === "baseline"
-                  ? "STOP CALIBRATION & PROCEED"
-                  : "STOP & AUTO-ANALYZE VERDICT"
-                : `SPEAKING... (${(5.0 - duration).toFixed(0)}s LEFT)`}
-            </span>
-          </button>
         )}
-      </div>
+
+        {/* Error message */}
+        {errorMsg && (
+          <div className="flex items-center space-x-2 text-accent-rose bg-accent-rose/10 border border-accent-rose/30 p-3 rounded-xl text-xs">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Studio Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          {!isRecording ? (
+            <button
+              type="button"
+              onClick={startRecording}
+              className="btn-3d px-6 py-3.5 rounded-xl bg-gradient-to-r from-accent-emerald to-accent-teal hover:from-emerald-400 hover:to-teal-400 text-studio-950 font-bold text-sm flex items-center gap-2 shadow-lg shadow-accent-emerald/20 border-b-2 border-emerald-700"
+            >
+              <Mic className="w-4 h-4" />
+              {step === 1
+                ? baselineBlob
+                  ? "Re-record Calibration"
+                  : "Start Calibration Recording"
+                : testBlob
+                ? "Re-record Test Statement"
+                : "Start Statement Recording"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={stopRecording}
+              className={`btn-3d px-6 py-3.5 rounded-xl text-white font-bold text-sm flex items-center gap-2 shadow-lg border-b-2 ${
+                isMinTimeMet
+                  ? "bg-accent-rose hover:bg-rose-600 shadow-accent-rose/30 border-rose-800 animate-pulse"
+                  : "bg-studio-700 border-studio-850 cursor-not-allowed opacity-80"
+              }`}
+            >
+              <Square className="w-4 h-4 fill-current" />
+              {isMinTimeMet ? "Stop Recording (Auto-Save)" : `Recording (${5 - elapsedSeconds}s remaining)`}
+            </button>
+          )}
+
+          {/* Navigation & Submit */}
+          <div className="flex items-center space-x-3">
+            {step === 2 && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-4 py-2.5 rounded-xl border border-studio-700 hover:bg-studio-800 text-studio-300 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Start Over
+              </button>
+            )}
+
+            {step === 1 && baselineBlob && (
+              <button
+                type="button"
+                onClick={proceedToTest}
+                disabled={isRecording || elapsedSeconds < 5}
+                className="btn-3d px-6 py-3.5 rounded-xl bg-studio-100 hover:bg-white text-studio-950 font-bold text-sm flex items-center gap-2 shadow-lg border-b-2 border-studio-300 disabled:opacity-50"
+              >
+                Proceed to Test Statement
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+
+            {step === 2 && testBlob && (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isLoading || isRecording || elapsedSeconds < 5}
+                className="btn-3d px-7 py-3.5 rounded-xl bg-gradient-to-r from-accent-amber to-amber-500 hover:from-amber-400 hover:to-amber-500 text-studio-950 font-extrabold text-sm flex items-center gap-2 shadow-lg shadow-accent-amber/20 border-b-2 border-amber-600 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-studio-950 border-t-transparent rounded-full animate-spin" />
+                    Extracting Delta Vectors...
+                  </span>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Compute Differential Stress Analysis
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </Card3D>
     </div>
   );
 }

@@ -1,320 +1,351 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Database, CheckCircle2, AlertCircle, Mic, Square, Sparkles, Terminal } from "lucide-react";
-import { submitDatasetSession, fetchDatasetStats } from "../services/api";
+import { Database, ShieldCheck, Check, AlertCircle, Mic, Square, Sparkles, UploadCloud } from "lucide-react";
+import AudioVisualizer3D from "./AudioVisualizer3D";
+import Card3D from "./Card3D";
+
+const API_BASE = "";
 
 export default function DataCollectionMode() {
-  const [speakerId, setSpeakerId] = useState("speaker_01");
-  const [promptQuestion, setPromptQuestion] = useState("Did you finish all the tasks assigned to you today?");
-  const [label, setLabel] = useState("Truthful");
-  const [consentGiven, setConsentGiven] = useState(true);
+  const [hasConsent, setHasConsent] = useState(false);
+  const [label, setLabel] = useState("truthful");
+  const [sessionNotes, setSessionNotes] = useState("");
+  const [stats, setStats] = useState(null);
 
-  const [step, setStep] = useState("baseline");
+  // Step state: 1 = baseline, 2 = test statement
+  const [step, setStep] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
-  const [duration, setDuration] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   const [baselineBlob, setBaselineBlob] = useState(null);
   const [testBlob, setTestBlob] = useState(null);
+  const [baselineUrl, setBaselineUrl] = useState(null);
+  const [testUrl, setTestUrl] = useState(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState(null);
-  const [stats, setStats] = useState({ total_sessions: 0, truthful_count: 0, deceptive_count: 0 });
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const timerRef = useRef(null);
+  const timerIntervalRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const streamRef = useRef(null);
 
-  const loadStats = () => {
-    fetchDatasetStats().then(setStats);
+  const fetchStats = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/dataset/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (e) {
+      console.warn("Could not fetch dataset stats", e);
+    }
   };
 
   useEffect(() => {
-    loadStats();
+    fetchStats();
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") audioContextRef.current.close();
     };
   }, []);
 
   const startRecording = async () => {
-    setStatusMessage(null);
-    setDuration(0);
+    setErrorMsg("");
+    setSubmitSuccess(false);
     audioChunksRef.current = [];
+    setElapsedSeconds(0);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true },
+      });
+      streamRef.current = stream;
 
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      source.connect(analyser);
+
+      audioContextRef.current = audioCtx;
+      analyserRef.current = analyser;
+
+      const recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
       recorder.onstop = () => {
         const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        stream.getTracks().forEach((track) => track.stop());
-
-        if (step === "baseline") {
+        const url = URL.createObjectURL(blob);
+        if (step === 1) {
           setBaselineBlob(blob);
-          setIsRecording(false);
-          setStep("test");
+          setBaselineUrl(url);
         } else {
           setTestBlob(blob);
-          setIsRecording(false);
-          setStep("ready_to_save");
+          setTestUrl(url);
         }
+        if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
       };
 
       mediaRecorderRef.current = recorder;
-      recorder.start(200);
+      recorder.start(100);
       setIsRecording(true);
 
       const startTime = Date.now();
-      timerRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
-        setDuration(elapsed);
-        if (elapsed >= 60.0) {
-          stopRecording();
-        }
-      }, 100);
+      timerIntervalRef.current = setInterval(() => {
+        const sec = Math.floor((Date.now() - startTime) / 1000);
+        setElapsedSeconds(sec);
+        if (sec >= 60) stopRecording();
+      }, 250);
     } catch (err) {
-      console.error("Mic error:", err);
-      setStatusMessage({ type: "error", text: "Could not access microphone." });
+      setErrorMsg("Microphone permission denied.");
     }
   };
 
   const stopRecording = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      setIsRecording(false);
     }
   };
 
   const handleSaveToDataset = async () => {
-    if (!baselineBlob || !testBlob) return;
-    if (!consentGiven) {
-      setStatusMessage({ type: "error", text: "Consent is required to save training data." });
+    if (!hasConsent) {
+      setErrorMsg("Participant consent is required before saving recording data.");
+      return;
+    }
+    if (!baselineBlob || !testBlob) {
+      setErrorMsg("Both baseline and labeled test recordings are required.");
       return;
     }
 
     setIsSubmitting(true);
-    setStatusMessage(null);
+    setErrorMsg("");
+
+    const formData = new FormData();
+    formData.append("baseline_audio", baselineBlob, "baseline.webm");
+    formData.append("test_audio", testBlob, "test.webm");
+    formData.append("label", label);
+    formData.append("consent", "true");
+    formData.append("notes", sessionNotes);
 
     try {
-      const res = await submitDatasetSession({
-        baselineBlob,
-        testBlob,
-        label,
-        speakerId,
-        promptQuestion,
-        consentGiven,
+      const res = await fetch(`${API_BASE}/api/dataset/collect`, {
+        method: "POST",
+        body: formData,
       });
 
-      setStatusMessage({
-        type: "success",
-        text: `Sample #${res.total_collected_sessions} saved successfully as '${label}'!`,
-      });
-      loadStats();
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Submission failed");
+      }
+
+      setSubmitSuccess(true);
       setBaselineBlob(null);
       setTestBlob(null);
-      setStep("baseline");
-      setDuration(0);
+      setBaselineUrl(null);
+      setTestUrl(null);
+      setStep(1);
+      setSessionNotes("");
+      fetchStats();
     } catch (err) {
-      console.error("Save error:", err);
-      setStatusMessage({ type: "error", text: err.message || "Failed to save sample." });
+      setErrorMsg(err.message || "Failed to save sample session.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleReset = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setBaselineBlob(null);
-    setTestBlob(null);
-    setStep("baseline");
-    setDuration(0);
-    setIsRecording(false);
-    setStatusMessage(null);
-  };
-
-  const isMinDurationMet = duration >= 5.0;
-
   return (
-    <div className="bg-dark-900/90 border border-dark-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 backdrop-blur-xl">
+    <div className="space-y-6">
       {/* Studio Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-dark-800 pb-5">
-        <div className="flex items-center space-x-3.5">
-          <div className="w-10 h-10 rounded-xl bg-dark-850 border border-dark-700 flex items-center justify-center text-neon-purple shadow-lg">
-            <Database className="w-5 h-5 text-neon-purple" />
+      <div className="border-b border-studio-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <Database className="w-5 h-5 text-accent-teal" />
+            Vocal Dataset Collection Studio
+          </h3>
+          <p className="text-xs text-studio-400 mt-1">
+            Contribute consented, calibrated audio pairs to expand and refine custom training datasets.
+          </p>
+        </div>
+
+        {stats && (
+          <div className="bg-studio-900/80 px-4 py-2 rounded-xl border border-studio-800 flex items-center gap-4 text-xs font-mono">
+            <div>
+              <span className="text-studio-400 block text-[10px]">TOTAL COLLECTED</span>
+              <span className="text-white font-bold">{stats.total_collected || 0}</span>
+            </div>
+            <div>
+              <span className="text-accent-emerald block text-[10px]">TRUTHFUL</span>
+              <span className="text-accent-emerald font-bold">{stats.truthful_count || 0}</span>
+            </div>
+            <div>
+              <span className="text-accent-rose block text-[10px]">DECEPTIVE</span>
+              <span className="text-accent-rose font-bold">{stats.deceptive_count || 0}</span>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg sm:text-xl font-extrabold text-white font-mono">DATA COLLECTION STUDIO</h2>
-            <p className="text-xs font-mono text-dark-500">
-              Record consented Truth / Lie delta samples to train your custom model
+        )}
+      </div>
+
+      {/* Consent Section */}
+      <Card3D depth={8} className="glass-panel rounded-2xl p-6">
+        <label className="flex items-start gap-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={hasConsent}
+            onChange={(e) => setHasConsent(e.target.checked)}
+            className="mt-1 w-4 h-4 rounded border-studio-600 bg-studio-950 text-accent-emerald focus:ring-accent-emerald/40"
+          />
+          <div className="space-y-1">
+            <span className="text-sm font-bold text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-accent-emerald" />
+              Informed Research Consent
+            </span>
+            <p className="text-xs text-studio-400 leading-relaxed">
+              I consent to having these audio recordings anonymously processed, feature-extracted, and stored locally for machine learning training and calibration benchmarking. No personally identifying information will be publicly distributed.
             </p>
           </div>
-        </div>
+        </label>
+      </Card3D>
 
-        {/* Counter Badge */}
-        <div className="flex items-center space-x-3 bg-dark-950 px-4 py-2.5 rounded-2xl border border-dark-800 text-xs font-mono">
-          <div>
-            <span className="text-dark-500 block text-[10px] uppercase font-bold">TOTAL DATASET</span>
-            <span className="font-extrabold text-neon-purple text-sm">{stats.total_sessions} SESSIONS</span>
+      {/* Label and Setup */}
+      {hasConsent && (
+        <Card3D depth={8} className="glass-panel rounded-2xl p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-studio-300 mb-2">
+                Ground-Truth Label for Step 2 Statement
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLabel("truthful")}
+                  className={`p-3 rounded-xl border text-xs font-bold transition-all ${
+                    label === "truthful"
+                      ? "bg-accent-emerald/20 border-accent-emerald text-accent-emerald shadow-glow-emerald"
+                      : "bg-studio-900 border-studio-700 text-studio-400"
+                  }`}
+                >
+                  Truthful Statement
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLabel("deceptive")}
+                  className={`p-3 rounded-xl border text-xs font-bold transition-all ${
+                    label === "deceptive"
+                      ? "bg-accent-rose/20 border-accent-rose text-accent-rose shadow-glow-rose"
+                      : "bg-studio-900 border-studio-700 text-studio-400"
+                  }`}
+                >
+                  Deceptive / High Stress
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-studio-300 mb-2">
+                Session Notes (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Quiet room, condenser mic, female speaker"
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+                className="w-full bg-studio-950 border border-studio-700 rounded-xl px-3 py-2.5 text-xs text-white placeholder-studio-500 focus:outline-none focus:border-accent-teal"
+              />
+            </div>
           </div>
-          <div className="border-l border-dark-800 pl-3">
-            <span className="text-neon-mint font-bold">{stats.truthful_count} Truth</span>
-            <span className="text-dark-600 mx-1.5">/</span>
-            <span className="text-neon-coral font-bold">{stats.deceptive_count} Lie</span>
+
+          {/* 3D Wave Visualizer */}
+          <div className="relative h-36 rounded-2xl bg-studio-950 border border-studio-800 overflow-hidden flex flex-col items-center justify-center">
+            <AudioVisualizer3D
+              analyserNode={analyserRef.current}
+              isRecording={isRecording}
+              mode={step === 1 ? "baseline" : "test"}
+            />
+            <div className="absolute top-2 left-3 text-xs font-mono bg-studio-900/80 px-2.5 py-1 rounded-lg border border-white/10 text-white">
+              {isRecording ? `Recording (${elapsedSeconds}s)` : `Step ${step}: ${step === 1 ? "Neutral Baseline" : "Labeled Statement"}`}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {statusMessage && (
-        <div
-          className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-mono border ${
-            statusMessage.type === "success"
-              ? "bg-neon-mint/10 border-neon-mint/30 text-neon-mint"
-              : "bg-neon-coral/10 border-neon-coral/30 text-neon-coral"
-          }`}
-        >
-          {statusMessage.type === "success" ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-          ) : (
-            <AlertCircle className="w-4 h-4 shrink-0" />
-          )}
-          <p>{statusMessage.text}</p>
-        </div>
-      )}
-
-      {/* Metadata Inputs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
-        <div>
-          <label className="block text-[11px] font-bold text-dark-500 uppercase tracking-wider mb-1.5">
-            SPEAKER ID
-          </label>
-          <input
-            type="text"
-            value={speakerId}
-            onChange={(e) => setSpeakerId(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-dark-950 border border-dark-800 rounded-xl text-xs text-white focus:outline-none focus:border-neon-purple font-mono"
-            placeholder="e.g. participant_01"
-          />
-        </div>
-
-        <div>
-          <label className="block text-[11px] font-bold text-dark-500 uppercase tracking-wider mb-1.5">
-            GROUND TRUTH LABEL
-          </label>
-          <div className="flex bg-dark-950 p-1 rounded-xl border border-dark-800">
-            <button
-              onClick={() => setLabel("Truthful")}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
-                label === "Truthful"
-                  ? "bg-neon-mint text-dark-950 shadow-md"
-                  : "text-dark-500 hover:text-white"
-              }`}
-            >
-              Truthful
-            </button>
-            <button
-              onClick={() => setLabel("Deceptive")}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
-                label === "Deceptive"
-                  ? "bg-neon-coral text-white shadow-md"
-                  : "text-dark-500 hover:text-white"
-              }`}
-            >
-              Deceptive
-            </button>
-          </div>
-        </div>
-
-        <div className="sm:col-span-1">
-          <label className="block text-[11px] font-bold text-dark-500 uppercase tracking-wider mb-1.5">
-            INQUIRY PROMPT
-          </label>
-          <input
-            type="text"
-            value={promptQuestion}
-            onChange={(e) => setPromptQuestion(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-dark-950 border border-dark-800 rounded-xl text-xs text-white focus:outline-none focus:border-neon-purple font-mono"
-          />
-        </div>
-      </div>
-
-      {/* Recording Steps */}
-      <div className="p-5 bg-dark-950 rounded-2xl border border-dark-800 space-y-4 font-mono">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-bold text-slate-300">
-            {step === "baseline"
-              ? "> PHASE 1: RECORD CALIBRATION BASELINE (~10-15s)"
-              : step === "test"
-              ? `> PHASE 2: RECORD ${label.toUpperCase()} RESPONSE (5-60s)`
-              : "> PHASE 3: SAMPLE CAPTURED // READY TO STORE"}
-          </span>
-          <span className="text-dark-500">{duration.toFixed(1)}s / 60s</span>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-4 py-2">
-          {step !== "ready_to_save" ? (
-            !isRecording ? (
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            {!isRecording ? (
               <button
+                type="button"
                 onClick={startRecording}
-                className="flex items-center space-x-2 px-6 py-3.5 bg-neon-purple hover:bg-neon-purple/90 text-white font-mono font-bold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-neon-purple/20 transition-all transform hover:scale-[1.02] active:scale-95"
+                className="btn-3d px-5 py-3 rounded-xl bg-accent-teal hover:bg-teal-400 text-studio-950 font-bold text-xs flex items-center gap-2 shadow-lg"
               >
                 <Mic className="w-4 h-4" />
-                <span>
-                  {step === "baseline" ? "CAPTURE CALIBRATION" : `CAPTURE ${label.toUpperCase()} CLIP`}
-                </span>
+                {step === 1
+                  ? baselineBlob
+                    ? "Re-record Baseline"
+                    : "Record 5s+ Baseline"
+                  : testBlob
+                  ? "Re-record Statement"
+                  : "Record Labeled Statement"}
               </button>
             ) : (
               <button
+                type="button"
                 onClick={stopRecording}
-                disabled={!isMinDurationMet}
-                className={`flex items-center space-x-2 px-6 py-3.5 font-mono font-bold rounded-xl text-xs uppercase tracking-wider transition-all ${
-                  isMinDurationMet
-                    ? "bg-neon-coral text-white shadow-lg cursor-pointer transform hover:scale-[1.02] active:scale-95"
-                    : "bg-dark-800 text-dark-500 cursor-not-allowed border border-dark-700"
-                }`}
+                disabled={elapsedSeconds < 5}
+                className="btn-3d px-5 py-3 rounded-xl bg-accent-rose hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50"
               >
                 <Square className="w-4 h-4 fill-current" />
-                <span>
-                  {isMinDurationMet
-                    ? "STOP CAPTURE"
-                    : `SPEAKING... (${(5 - duration).toFixed(0)}s LEFT)`}
-                </span>
+                {elapsedSeconds >= 5 ? "Stop Recording" : `Keep talking (${5 - elapsedSeconds}s)`}
               </button>
-            )
-          ) : (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleReset}
-                className="px-4 py-3 bg-dark-850 hover:bg-dark-800 text-dark-500 hover:text-white rounded-xl text-xs font-mono font-bold"
-              >
-                DISCARD & RETRY
-              </button>
+            )}
 
-              <button
-                onClick={handleSaveToDataset}
-                disabled={isSubmitting || !consentGiven}
-                className="flex items-center space-x-2 px-7 py-3 bg-neon-mint hover:bg-neon-mint/90 text-dark-950 font-mono font-bold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-neon-mint/20 transition-all disabled:opacity-50 transform hover:scale-[1.02] active:scale-95"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>{isSubmitting ? "STORING..." : `STORE '${label.toUpperCase()}' SAMPLE`}</span>
-              </button>
+            <div className="flex items-center space-x-3">
+              {step === 1 && baselineBlob && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep(2);
+                    setElapsedSeconds(0);
+                  }}
+                  className="btn-3d px-5 py-3 rounded-xl bg-studio-100 hover:bg-white text-studio-950 font-bold text-xs"
+                >
+                  Next: Labeled Statement
+                </button>
+              )}
+
+              {step === 2 && testBlob && (
+                <button
+                  type="button"
+                  onClick={handleSaveToDataset}
+                  disabled={isSubmitting}
+                  className="btn-3d px-6 py-3 rounded-xl bg-gradient-to-r from-accent-emerald to-accent-teal text-studio-950 font-extrabold text-xs flex items-center gap-2 shadow-lg"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  {isSubmitting ? "Saving Sample..." : "Save to Dataset"}
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </Card3D>
+      )}
 
-      {/* Informed Consent Checkbox */}
-      <div className="flex items-start space-x-3 p-3.5 bg-dark-950/60 rounded-xl border border-dark-800 font-mono text-xs">
-        <input
-          type="checkbox"
-          id="consentCheckbox"
-          checked={consentGiven}
-          onChange={(e) => setConsentGiven(e.target.checked)}
-          className="mt-0.5 w-4 h-4 rounded text-neon-purple focus:ring-neon-purple bg-dark-900 border-dark-700"
-        />
-        <label htmlFor="consentCheckbox" className="text-dark-500 leading-relaxed cursor-pointer font-sans text-xs">
-          <strong className="text-slate-300 font-mono">INFORMED RESEARCH CONSENT:</strong> I confirm this voice sample was recorded with the speaker's informed consent strictly for acoustic modeling and calibration training.
-        </label>
-      </div>
+      {submitSuccess && (
+        <div className="p-4 bg-accent-emerald/15 border border-accent-emerald/40 rounded-2xl text-accent-emerald text-xs flex items-center gap-2 font-bold animate-fadeIn">
+          <Check className="w-4 h-4" />
+          Successfully extracted acoustic features and committed session to training dataset!
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="p-4 bg-accent-rose/15 border border-accent-rose/40 rounded-2xl text-accent-rose text-xs flex items-center gap-2 font-bold animate-fadeIn">
+          <AlertCircle className="w-4 h-4" />
+          {errorMsg}
+        </div>
+      )}
     </div>
   );
 }

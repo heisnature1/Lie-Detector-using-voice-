@@ -1,4 +1,4 @@
-"""Classifier service for predicting vocal stress score and extracting driving signals."""
+"""Classifier service for predicting Truthful vs Deceptive vocal stress verdict and delta signals."""
 
 from __future__ import annotations
 
@@ -16,14 +16,18 @@ from backend.app.config import (
     SCALER_PATH,
     STANDARD_DISCLAIMER,
 )
-from backend.app.features.explainer import TopSignalDict, explain_top_signals
-from backend.app.features.extractor import FEATURE_NAMES, feature_dict_to_vector
+from backend.app.features.explainer import TopSignalDict, explain_delta_signals
+from backend.app.features.extractor import (
+    DELTA_FEATURE_NAMES,
+    compute_delta_features,
+    delta_dict_to_vector,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class StressClassifier:
-    """Loads trained artifacts and infers vocal stress likelihood."""
+    """Loads trained artifacts and infers binary Truthful vs Deceptive verdict from delta features."""
 
     def __init__(
         self,
@@ -38,7 +42,7 @@ class StressClassifier:
         self.model: Optional[Any] = None
         self.scaler: Optional[Any] = None
         self.meta: Dict[str, Any] = {}
-        self.classes: List[str] = ["Low", "Medium", "High"]
+        self.classes: List[str] = ["Truthful-leaning", "Deception indicators"]
 
         self._load_artifacts()
 
@@ -59,25 +63,22 @@ class StressClassifier:
         if self.meta_path.exists():
             with open(self.meta_path, "r", encoding="utf-8") as f:
                 self.meta = json.load(f)
-            self.classes = self.meta.get("classes", ["Low", "Medium", "High"])
+            self.classes = self.meta.get("classes", ["Truthful-leaning", "Deception indicators"])
 
-    def predict(
+    def predict_session(
         self,
-        features: Dict[str, float],
-    ) -> Tuple[str, float, List[TopSignalDict]]:
-        """Predict stress level, confidence, and top contributing signals.
-
-        Args:
-            features: Dictionary of extracted acoustic features.
-
-        Returns:
-            Tuple of (score, confidence, top_signals).
-        """
+        baseline_features: Dict[str, float],
+        test_features: Dict[str, float],
+    ) -> Tuple[str, float, List[TopSignalDict], Dict[str, float]]:
+        """Predict binary verdict (Truthful-leaning vs Deception indicators) from baseline/test deltas."""
         if self.model is None or self.scaler is None:
             raise RuntimeError("Model or scaler is not loaded.")
 
+        # Compute delta dictionary (test - baseline)
+        deltas = compute_delta_features(baseline_features, test_features)
+
         # Vectorize and scale
-        x_vec = feature_dict_to_vector(features).reshape(1, -1)
+        x_vec = delta_dict_to_vector(deltas).reshape(1, -1)
         x_scaled = self.scaler.transform(x_vec)
 
         # Probabilities
@@ -86,28 +87,49 @@ class StressClassifier:
 
         # Best class index
         best_idx = int(np.argmax(probabilities))
-        score = str(class_indices[best_idx])
+        verdict = str(class_indices[best_idx])
         confidence = float(probabilities[best_idx])
 
-        # Baseline statistics and importances
-        baseline_means = self.meta.get("baseline_calm_means", {})
-        baseline_stds = self.meta.get("baseline_calm_stds", {})
+        # Feature importances
         feature_importances = self.meta.get("feature_importances", {})
 
-        # Top driving signals
-        top_signals = explain_top_signals(
-            features=features,
-            predicted_score=score,
-            baseline_calm_means=baseline_means,
-            baseline_calm_stds=baseline_stds,
+        # Top driving delta signals
+        top_signals = explain_delta_signals(
+            delta_features=deltas,
+            verdict=verdict,
             feature_importances=feature_importances,
             top_k=3,
         )
 
-        return score, round(confidence, 3), top_signals
+        return verdict, round(confidence, 3), top_signals, deltas
+
+    def predict_single(
+        self,
+        features: Dict[str, float],
+    ) -> Tuple[str, float, List[TopSignalDict]]:
+        """Fallback prediction for a single clip against nominal baseline."""
+        nominal_baseline = {
+            "pitch_f0_mean": features.get("pitch_f0_mean", 130.0) * 0.95,
+            "pitch_f0_std": 10.0,
+            "pitch_f0_range": 30.0,
+            "jitter_local": 0.005,
+            "shimmer_local": 0.02,
+            "speech_rate": 2.2,
+            "pause_count": 2.0,
+            "pause_total_duration": 2.5,
+            "pause_mean_duration": 0.8,
+            "pause_ratio": 0.25,
+            "energy_variance": 0.01,
+            "energy_std": 0.05,
+            "energy_mean": 0.2,
+        }
+        for i in range(1, 14):
+            nominal_baseline[f"mfcc_{i}"] = features.get(f"mfcc_{i}", 0.0)
+
+        verdict, conf, signals, _ = self.predict_session(nominal_baseline, features)
+        return verdict, conf, signals
 
 
-# Global singleton instance
 _classifier_instance: Optional[StressClassifier] = None
 
 

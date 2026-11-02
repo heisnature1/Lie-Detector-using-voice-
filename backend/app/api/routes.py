@@ -41,7 +41,7 @@ router = APIRouter()
 
 async def _read_and_extract(file: UploadFile, label: str) -> tuple[Dict[str, float], float]:
     """Helper to validate, read bytes, and extract features for an uploaded audio file."""
-    if not file.filename:
+    if not file or not file.filename:
         raise AudioValidationError(f"Filename for {label} is missing.", code="MISSING_FILENAME")
 
     try:
@@ -145,12 +145,22 @@ async def get_model_info() -> ModelInfoResponse:
     include_in_schema=False,
 )
 async def analyze_session(
-    baseline_file: UploadFile = File(..., description="Neutral calibration baseline clip (5-60s)"),
-    test_file: UploadFile = File(..., description="Target inquiry response clip (5-60s)"),
+    baseline_file: Optional[UploadFile] = File(None, description="Neutral calibration baseline clip (5-60s)"),
+    baseline_audio: Optional[UploadFile] = File(None, description="Alias for baseline_file"),
+    test_file: Optional[UploadFile] = File(None, description="Target inquiry response clip (5-60s)"),
+    test_audio: Optional[UploadFile] = File(None, description="Alias for test_file"),
 ) -> SessionAnalysisResponse:
     """Extract features from both clips, compute delta (test minus baseline), and infer Truthful vs Deceptive verdict."""
-    baseline_feats, base_dur = await _read_and_extract(baseline_file, "calibration baseline")
-    test_feats, test_dur = await _read_and_extract(test_file, "test response")
+    actual_baseline = baseline_file or baseline_audio
+    actual_test = test_file or test_audio
+
+    if not actual_baseline:
+        raise AudioValidationError("Missing calibration baseline audio file.", code="MISSING_BASELINE")
+    if not actual_test:
+        raise AudioValidationError("Missing test inquiry response audio file.", code="MISSING_TEST_AUDIO")
+
+    baseline_feats, base_dur = await _read_and_extract(actual_baseline, "calibration baseline")
+    test_feats, test_dur = await _read_and_extract(actual_test, "test response")
 
     try:
         classifier = get_classifier()
@@ -203,10 +213,15 @@ async def analyze_session(
     include_in_schema=False,
 )
 async def analyze_single_audio(
-    file: UploadFile = File(..., description="Audio file (5-60s, max 10MB)"),
+    file: Optional[UploadFile] = File(None, description="Audio file (5-60s, max 10MB)"),
+    audio: Optional[UploadFile] = File(None, description="Alias for file"),
 ) -> AnalysisResponse:
     """Analyze a single audio clip with nominal baseline comparison."""
-    features, duration = await _read_and_extract(file, "audio clip")
+    actual_file = file or audio
+    if not actual_file:
+        raise AudioValidationError("Audio file is required.", code="MISSING_FILE")
+
+    features, duration = await _read_and_extract(actual_file, "audio clip")
 
     try:
         classifier = get_classifier()
@@ -239,19 +254,31 @@ async def analyze_single_audio(
     summary="Collect consented labeled session data to expand training dataset",
 )
 async def collect_training_sample(
-    baseline_file: UploadFile = File(...),
-    test_file: UploadFile = File(...),
+    baseline_file: Optional[UploadFile] = File(None),
+    baseline_audio: Optional[UploadFile] = File(None),
+    test_file: Optional[UploadFile] = File(None),
+    test_audio: Optional[UploadFile] = File(None),
     label: str = Form(..., description="'Truthful' or 'Deceptive'"),
     speaker_id: str = Form("anonymous"),
     prompt_question: str = Form("General inquiry"),
-    consent_given: bool = Form(True),
+    consent_given: Optional[bool] = Form(None),
+    consent: Optional[bool] = Form(None),
 ) -> Dict[str, Any]:
     """Store anonymized acoustic features and delta vectors into training dataset."""
-    if not consent_given:
+    has_consent = consent_given if consent_given is not None else (consent if consent is not None else True)
+    if not has_consent:
         raise AudioValidationError("User consent is required to contribute data.", code="CONSENT_REQUIRED")
 
-    baseline_feats, base_dur = await _read_and_extract(baseline_file, "calibration baseline")
-    test_feats, test_dur = await _read_and_extract(test_file, "test response")
+    actual_baseline = baseline_file or baseline_audio
+    actual_test = test_file or test_audio
+
+    if not actual_baseline:
+        raise AudioValidationError("Missing calibration baseline audio file.", code="MISSING_BASELINE")
+    if not actual_test:
+        raise AudioValidationError("Missing test inquiry response audio file.", code="MISSING_TEST_AUDIO")
+
+    baseline_feats, base_dur = await _read_and_extract(actual_baseline, "calibration baseline")
+    test_feats, test_dur = await _read_and_extract(actual_test, "test response")
 
     deltas = compute_delta_features(baseline_feats, test_feats)
 

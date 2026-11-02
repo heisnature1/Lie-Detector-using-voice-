@@ -5,7 +5,56 @@ import SampleTester from "./components/SampleTester";
 import DataCollectionMode from "./components/DataCollectionMode";
 import ResultScreen from "./components/ResultScreen";
 
-const API_BASE = "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
+/**
+ * Robust fetch helper that handles HTML 404/502 error pages gracefully
+ * without throwing unhandled "Unexpected token '<' / 'T'" JSON parse crashes.
+ */
+async function postSessionAnalysis(baselineBlob, testBlob) {
+  const formData = new FormData();
+  formData.append("baseline_file", baselineBlob, "baseline.webm");
+  formData.append("test_file", testBlob, "test.webm");
+  // Also append audio aliases for backwards compatibility
+  formData.append("baseline_audio", baselineBlob, "baseline.webm");
+  formData.append("test_audio", testBlob, "test.webm");
+
+  const endpoint = `${API_BASE}/analyze/session`;
+  let response;
+
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      body: formData,
+    });
+  } catch (netErr) {
+    throw new Error(
+      `Network connection failed to ${endpoint}. Please ensure the VoiceStress backend API server is online.`
+    );
+  }
+
+  const rawText = await response.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch (parseErr) {
+    if (!response.ok) {
+      throw new Error(
+        `Backend server returned HTTP ${response.status} (${response.statusText || "Server Error"}). If running locally or on Vercel, ensure the FastAPI backend is running and reachable.`
+      );
+    }
+    throw new Error(
+      `Invalid response format from ${endpoint}. Expected JSON but received: ${rawText.slice(0, 100)}...`
+    );
+  }
+
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || `Analysis failed with status ${response.status}`;
+    throw new Error(errorMsg);
+  }
+
+  return data;
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("record"); // 'record' | 'benchmark' | 'dataset'
@@ -18,21 +67,7 @@ export default function App() {
     setApiError("");
 
     try {
-      const formData = new FormData();
-      formData.append("baseline_audio", baselineBlob, "baseline.webm");
-      formData.append("test_audio", testBlob, "test.webm");
-
-      const response = await fetch(`${API_BASE}/analyze/session`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Differential acoustic analysis failed.");
-      }
-
-      const data = await response.json();
+      const data = await postSessionAnalysis(baselineBlob, testBlob);
       setAnalysisResult(data);
     } catch (err) {
       console.error("Analysis request error:", err);
@@ -131,11 +166,14 @@ export default function App() {
         {/* API Error Callout */}
         {apiError && (
           <div className="mb-6 p-4 bg-accent-rose/15 border border-accent-rose/40 rounded-2xl text-accent-rose text-xs flex items-center justify-between">
-            <span>{apiError}</span>
+            <div className="space-y-1">
+              <span className="font-bold block">Analysis Service Notice</span>
+              <span>{apiError}</span>
+            </div>
             <button
               type="button"
               onClick={() => setApiError("")}
-              className="text-accent-rose hover:underline font-bold ml-4"
+              className="text-accent-rose hover:underline font-bold ml-4 shrink-0 text-xs"
             >
               Dismiss
             </button>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Sparkles, Play, CheckCircle2, AlertTriangle, AlertCircle } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
 
 /**
  * Helper to encode audio buffer to 16-bit PCM WAV Blob in browser.
@@ -36,7 +36,6 @@ function audioBufferToWavBlob(buffer) {
   writeString(view, 36, "data");
   view.setUint32(40, dataLength, true);
 
-  // Write PCM audio data
   let offset = 44;
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
@@ -47,125 +46,98 @@ function audioBufferToWavBlob(buffer) {
   return new Blob([view], { type: "audio/wav" });
 }
 
-export default function SampleTester({ onAudioReady, isAnalyzing }) {
+function synthesizeClip(ctx, baseFreq, jitterAmp, modDepth, syllableRate, pauseDensity, duration = 8.0) {
+  const sr = ctx.sampleRate;
+  const totalSamples = Math.floor(sr * duration);
+  const buffer = ctx.createBuffer(1, totalSamples, sr);
+  const data = buffer.getChannelData(0);
+
+  let phase = 0;
+  for (let i = 0; i < totalSamples; i++) {
+    const t = i / sr;
+    const pitchMod = 1.0 + modDepth * Math.sin(2 * Math.PI * 3.0 * t);
+    const jitter = (Math.random() - 0.5) * jitterAmp;
+    const instPitch = baseFreq * pitchMod * (1.0 + jitter);
+
+    phase += (2 * Math.PI * instPitch) / sr;
+    const wave =
+      0.5 * Math.sin(phase) +
+      0.25 * Math.sin(2 * phase) +
+      0.15 * Math.sin(3 * phase);
+
+    const cycle = (t * syllableRate) % 1.0;
+    const envelope = cycle < (1.0 - pauseDensity) ? Math.sin((cycle / (1.0 - pauseDensity)) * Math.PI) : 0.0;
+    const noise = (Math.random() - 0.5) * 0.01;
+
+    data[i] = wave * envelope * 0.8 + noise;
+  }
+
+  return audioBufferToWavBlob(buffer);
+}
+
+export default function SampleTester({ onSessionReady, isAnalyzing }) {
   const [loadingType, setLoadingType] = useState(null);
 
   const generateAndTest = (type) => {
     setLoadingType(type);
-    const sr = 16000;
-    const duration = 12.0;
-    const totalSamples = sr * duration;
-
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioCtx({ sampleRate: sr });
-    const buffer = ctx.createBuffer(1, totalSamples, sr);
-    const data = buffer.getChannelData(0);
+    const ctx = new AudioCtx({ sampleRate: 16000 });
 
-    let baseFreq = 130.0;
-    let jitterAmp = 0.003;
-    let modDepth = 0.02;
-    let syllableRate = 2.0;
-    let pauseDensity = 0.28;
+    const baselineBlob = synthesizeClip(ctx, 130.0, 0.004, 0.02, 2.1, 0.26, 10.0);
 
-    if (type === "Medium") {
-      baseFreq = 175.0;
-      jitterAmp = 0.015;
-      modDepth = 0.06;
-      syllableRate = 3.0;
-      pauseDensity = 0.20;
-    } else if (type === "High") {
-      baseFreq = 230.0;
-      jitterAmp = 0.045;
-      modDepth = 0.14;
-      syllableRate = 4.4;
-      pauseDensity = 0.10;
+    let testBlob;
+    if (type === "Truthful") {
+      testBlob = synthesizeClip(ctx, 132.0, 0.005, 0.025, 2.2, 0.25, 8.0);
+    } else {
+      testBlob = synthesizeClip(ctx, 185.0, 0.038, 0.12, 4.2, 0.10, 8.0);
     }
 
-    let phase = 0;
-    for (let i = 0; i < totalSamples; i++) {
-      const t = i / sr;
-      const pitchMod = 1.0 + modDepth * Math.sin(2 * Math.PI * 3.0 * t);
-      const jitter = (Math.random() - 0.5) * jitterAmp;
-      const instPitch = baseFreq * pitchMod * (1.0 + jitter);
-
-      phase += (2 * Math.PI * instPitch) / sr;
-      const wave =
-        0.5 * Math.sin(phase) +
-        0.25 * Math.sin(2 * phase) +
-        0.15 * Math.sin(3 * phase);
-
-      // Syllable gating
-      const cycle = (t * syllableRate) % 1.0;
-      const envelope = cycle < (1.0 - pauseDensity) ? Math.sin((cycle / (1.0 - pauseDensity)) * Math.PI) : 0.0;
-      const noise = (Math.random() - 0.5) * 0.01;
-
-      data[i] = (wave * envelope * 0.8 + noise);
-    }
-
-    const wavBlob = audioBufferToWavBlob(buffer);
     setLoadingType(null);
-    onAudioReady(wavBlob, `sample_${type.toLowerCase()}_stress.wav`);
+    onSessionReady(baselineBlob, testBlob);
   };
 
   return (
     <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 text-center mt-6">
       <div className="flex items-center justify-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
         <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-        <span>One-Click Test Samples (No Mic Required)</span>
+        <span>One-Click Calibrated Test Sessions (No Mic Required)</span>
       </div>
       <p className="text-xs text-slate-400 mb-4 max-w-lg mx-auto">
-        Test the analyzer instantly using synthetic 12-second speech samples calibrated to different vocal stress levels:
+        Test delta feature extraction instantly using pre-calibrated baseline and statement session pairs:
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto">
         <button
-          onClick={() => generateAndTest("Low")}
+          onClick={() => generateAndTest("Truthful")}
           disabled={isAnalyzing}
-          className="p-3 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
+          className="p-3.5 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
         >
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Low Stress
+              Truthful-Leaning Session
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">12.0s</span>
+            <span className="text-[10px] text-slate-400 font-mono">10s base + 8s test</span>
           </div>
           <p className="text-[11px] text-slate-300 leading-snug">
-            Steady 130 Hz pitch, low jitter, natural breath pauses
+            Steady fundamental frequency (&Delta;F0 &approx; 0 Hz), minimal jitter delta, consistent breath pacing.
           </p>
         </button>
 
         <button
-          onClick={() => generateAndTest("Medium")}
+          onClick={() => generateAndTest("Deceptive")}
           disabled={isAnalyzing}
-          className="p-3 bg-amber-950/40 hover:bg-amber-950/70 border border-amber-500/30 hover:border-amber-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
-        >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5" />
-              Medium Stress
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono">12.0s</span>
-          </div>
-          <p className="text-[11px] text-slate-300 leading-snug">
-            175 Hz pitch with moderate dynamic swings & micro-variations
-          </p>
-        </button>
-
-        <button
-          onClick={() => generateAndTest("High")}
-          disabled={isAnalyzing}
-          className="p-3 bg-rose-950/40 hover:bg-rose-950/70 border border-rose-500/30 hover:border-rose-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
+          className="p-3.5 bg-rose-950/40 hover:bg-rose-950/70 border border-rose-500/30 hover:border-rose-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
         >
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5" />
-              High Stress
+              Deception Indicators Session
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">12.0s</span>
+            <span className="text-[10px] text-slate-400 font-mono">10s base + 8s test</span>
           </div>
           <p className="text-[11px] text-slate-300 leading-snug">
-            230 Hz elevated pitch, high jitter & rapid syllable pacing
+            Elevated pitch delta (&Delta;F0 &gt; +50 Hz), high jitter perturbation, hurried speech rate.
           </p>
         </button>
       </div>

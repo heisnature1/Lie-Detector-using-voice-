@@ -1,42 +1,43 @@
 import React, { useState, useEffect } from "react";
-import { Mic, UploadCloud, Activity, AlertCircle, RefreshCw } from "lucide-react";
+import { Mic, Database, AlertCircle } from "lucide-react";
 import Header from "./components/Header";
 import { DisclaimerBanner, DisclaimerModal } from "./components/Disclaimer";
-import AudioRecorder from "./components/AudioRecorder";
-import FileUpload from "./components/FileUpload";
+import LiveSessionRecorder from "./components/LiveSessionRecorder";
+import DataCollectionMode from "./components/DataCollectionMode";
 import SampleTester from "./components/SampleTester";
 import AnalysisLoader from "./components/AnalysisLoader";
 import ResultScreen from "./components/ResultScreen";
-import { analyzeAudio, fetchModelInfo, fetchHealth } from "./services/api";
+import { analyzeSession, fetchModelInfo } from "./services/api";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("record"); // 'record' | 'upload'
+  const [activeTab, setActiveTab] = useState("live");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
-  const [lastAudioBlob, setLastAudioBlob] = useState(null);
+  const [lastBaselineBlob, setLastBaselineBlob] = useState(null);
+  const [lastTestBlob, setLastTestBlob] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [modelInfo, setModelInfo] = useState(null);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
 
   useEffect(() => {
-    // Warm up model metadata
     fetchModelInfo().then((info) => {
       if (info) setModelInfo(info);
     });
   }, []);
 
-  const handleAudioReady = async (audioBlobOrFile, filename) => {
+  const handleSessionReady = async (baselineBlob, testBlob) => {
     setErrorMessage(null);
     setIsAnalyzing(true);
-    setLastAudioBlob(audioBlobOrFile);
+    setLastBaselineBlob(baselineBlob);
+    setLastTestBlob(testBlob);
 
     try {
-      const result = await analyzeAudio(audioBlobOrFile, filename);
+      const result = await analyzeSession(baselineBlob, testBlob);
       setAnalysisResult(result);
     } catch (err) {
-      console.error("Analysis failed:", err);
+      console.error("Session analysis failed:", err);
       setErrorMessage(
-        err.message || "An error occurred while analyzing the audio clip. Please try again."
+        err.message || "An error occurred while analyzing the audio session. Please try again."
       );
     } finally {
       setIsAnalyzing(false);
@@ -45,24 +46,21 @@ export default function App() {
 
   const handleReset = () => {
     setAnalysisResult(null);
-    setLastAudioBlob(null);
+    setLastBaselineBlob(null);
+    setLastTestBlob(null);
     setErrorMessage(null);
   };
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-between text-slate-100">
-      {/* Top Navigation */}
       <Header
         modelInfo={modelInfo}
         onOpenDisclaimer={() => setIsDisclaimerOpen(true)}
       />
 
-      {/* Main Content Area */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 w-full flex-1">
-        {/* Ethics & Legal Disclaimer Banner */}
         <DisclaimerBanner onOpenModal={() => setIsDisclaimerOpen(true)} />
 
-        {/* Global Error Banner */}
         {errorMessage && (
           <div className="mb-6 p-4 bg-rose-950/60 border border-rose-500/40 rounded-2xl flex items-start justify-between gap-3 text-sm text-rose-200 shadow-xl">
             <div className="flex items-start gap-3">
@@ -81,85 +79,76 @@ export default function App() {
           </div>
         )}
 
-        {/* Loading State */}
         {isAnalyzing ? (
           <AnalysisLoader />
         ) : analysisResult ? (
-          /* Results View */
           <ResultScreen
             result={analysisResult}
-            audioBlob={lastAudioBlob}
+            baselineBlob={lastBaselineBlob}
+            testBlob={lastTestBlob}
             onReset={handleReset}
           />
         ) : (
-          /* Input View: Record or Upload */
           <div className="space-y-6">
-            {/* Tab Selection */}
-            <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 max-w-sm mx-auto shadow-inner">
+            <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 max-w-md mx-auto shadow-inner">
               <button
                 onClick={() => {
-                  setActiveTab("record");
+                  setActiveTab("live");
                   setErrorMessage(null);
                 }}
                 className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === "record"
+                  activeTab === "live"
                     ? "bg-sky-600 text-white shadow-md shadow-sky-600/30"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
                 <Mic className="w-4 h-4" />
-                <span>Record Audio (10-60s)</span>
+                <span>Live Calibrated Analysis</span>
               </button>
 
               <button
                 onClick={() => {
-                  setActiveTab("upload");
+                  setActiveTab("dataset");
                   setErrorMessage(null);
                 }}
                 className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                  activeTab === "upload"
-                    ? "bg-sky-600 text-white shadow-md shadow-sky-600/30"
+                  activeTab === "dataset"
+                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                <UploadCloud className="w-4 h-4" />
-                <span>Upload File</span>
+                <Database className="w-4 h-4" />
+                <span>Data Collection Studio</span>
               </button>
             </div>
 
-            {/* Active Input Panel */}
-            {activeTab === "record" ? (
-              <AudioRecorder
-                onAudioReady={handleAudioReady}
-                isAnalyzing={isAnalyzing}
-              />
+            {activeTab === "live" ? (
+              <>
+                <LiveSessionRecorder
+                  onSessionReady={handleSessionReady}
+                  isAnalyzing={isAnalyzing}
+                />
+                <SampleTester
+                  onSessionReady={handleSessionReady}
+                  isAnalyzing={isAnalyzing}
+                />
+              </>
             ) : (
-              <FileUpload
-                onAudioReady={handleAudioReady}
-                isAnalyzing={isAnalyzing}
-              />
+              <DataCollectionMode />
             )}
-
-            {/* Instant Demo One-Click Tester */}
-            <SampleTester
-              onAudioReady={handleAudioReady}
-              isAnalyzing={isAnalyzing}
-            />
           </div>
         )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-slate-800/80 bg-slate-900/40 py-6 text-center text-xs text-slate-400">
         <div className="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p>© 2026 VoiceStress Research & Entertainment MVP. All rights reserved.</p>
           <p className="text-slate-400">
-            Acoustics engine powered by librosa & scikit-learn.
+            Delta acoustic analysis engine powered by librosa & scikit-learn.
           </p>
         </div>
       </footer>
 
-      {/* Disclaimer Modal */}
       <DisclaimerModal
         isOpen={isDisclaimerOpen}
         onClose={() => setIsDisclaimerOpen(false)}

@@ -1,8 +1,8 @@
-"""Acoustic feature explainer for vocal stress indicators."""
+"""Acoustic feature explainer for vocal stress and delta indicators."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, TypedDict
+from typing import Any, Dict, List, Tuple, TypedDict
 
 
 class TopSignalDict(TypedDict):
@@ -11,165 +11,133 @@ class TopSignalDict(TypedDict):
     explanation: str
 
 
-# Human-friendly descriptions and scientific rationales for acoustic features
-SIGNAL_METADATA: Dict[str, Dict[str, str]] = {
-    "pitch_f0_std": {
-        "title": "Pitch Variability (F0 Std)",
+# Plain English delta metadata and explanations
+DELTA_METADATA: Dict[str, Dict[str, str]] = {
+    "delta_pitch_f0_mean": {
+        "title": "Pitch Shift (Δ F0 Mean)",
         "unit": "Hz",
-        "high_exp": "High pitch fluctuations ({val:.1f} Hz) reflect vocal cord tension and autonomic arousal.",
-        "low_exp": "Steady pitch contour ({val:.1f} Hz) indicates relaxed and controlled vocal cords.",
+        "deceptive_exp": "Fundamental pitch rose by {val:+.1f} Hz above calibration baseline, reflecting laryngeal tension.",
+        "truthful_exp": "Base pitch remained stable ({val:+.1f} Hz relative to calibration baseline), reflecting relaxed vocal cords.",
     },
-    "pitch_f0_range": {
-        "title": "Pitch Range (F0 Range)",
+    "delta_pitch_f0_std": {
+        "title": "Pitch Variability (Δ F0 Std)",
         "unit": "Hz",
-        "high_exp": "Wide pitch range ({val:.1f} Hz) suggests heightened emotional dynamics and intonation swings.",
-        "low_exp": "Restrained pitch range ({val:.1f} Hz) matches typical relaxed conversational pacing.",
+        "deceptive_exp": "Pitch fluctuations increased by {val:+.1f} Hz over baseline, indicating dynamic autonomic arousal.",
+        "truthful_exp": "Intonation variance remained steady ({val:+.1f} Hz delta vs baseline), showing consistent vocal control.",
     },
-    "pitch_f0_mean": {
-        "title": "Mean Fundamental Frequency",
+    "delta_pitch_f0_range": {
+        "title": "Pitch Dynamic Range (Δ Range)",
         "unit": "Hz",
-        "high_exp": "Elevated base pitch ({val:.1f} Hz) is often associated with laryngeal muscle contraction.",
-        "low_exp": "Normal resting fundamental frequency ({val:.1f} Hz) aligns with low physical stress.",
+        "deceptive_exp": "Pitch range expanded by {val:+.1f} Hz relative to baseline questions, signaling heightened intonation swings.",
+        "truthful_exp": "Pitch range was consistent ({val:+.1f} Hz shift vs baseline) without irregular tonal excursions.",
     },
-    "jitter_local": {
-        "title": "Vocal Jitter (Frequency Instability)",
+    "delta_jitter_local": {
+        "title": "Vocal Jitter Perturbation (Δ Jitter)",
         "unit": "%",
-        "high_exp": "Elevated cycle-to-cycle frequency variation ({val_pct:.2f}%) indicates micro-tremors in vocal fold control.",
-        "low_exp": "Minimal vocal frequency perturbation ({val_pct:.2f}%) shows stable neuromuscular laryngeal control.",
+        "deceptive_exp": "Micro-frequency instability increased by {val_pct:+.2f}% compared to baseline, indicating micro-tremors in vocal folds.",
+        "truthful_exp": "Micro-period frequency stability was preserved ({val_pct:+.2f}% delta vs baseline), showing steady neuromuscular control.",
     },
-    "shimmer_local": {
-        "title": "Vocal Shimmer (Amplitude Instability)",
+    "delta_shimmer_local": {
+        "title": "Vocal Shimmer Perturbation (Δ Shimmer)",
         "unit": "%",
-        "high_exp": "Increased amplitude perturbation ({val_pct:.2f}%) reflects uneven subglottal breath pressure.",
-        "low_exp": "Consistent voice amplitude ({val_pct:.2f}%) reflects steady respiratory control.",
+        "deceptive_exp": "Micro-amplitude instability rose by {val_pct:+.2f}% over calibration, indicating uneven subglottal breath pressure.",
+        "truthful_exp": "Amplitude consistency was maintained ({val_pct:+.2f}% delta vs baseline), showing steady respiratory support.",
     },
-    "speech_rate": {
-        "title": "Speech Pacing & Syllable Rate",
-        "unit": "onsets/sec",
-        "high_exp": "Accelerated speech pacing ({val:.2f} syllables/sec) correlates with autonomic sympathetic activation.",
-        "low_exp": "Measured, calm speech pacing ({val:.2f} syllables/sec) matches relaxed breathing patterns.",
+    "delta_speech_rate": {
+        "title": "Speech Pacing Shift (Δ Syllables/s)",
+        "unit": "syllables/s",
+        "deceptive_exp": "Speaking rate shifted by {val:+.2f} syllables/sec compared to neutral answers, reflecting autonomic arousal.",
+        "truthful_exp": "Speech pacing closely matched neutral baseline ({val:+.2f} syllables/sec change), indicating natural articulation tempo.",
     },
-    "pause_ratio": {
-        "title": "Silence & Pause Ratio",
+    "delta_pause_ratio": {
+        "title": "Pause & Silence Ratio (Δ Silence)",
         "unit": "%",
-        "high_exp": "Reduced pause ratio ({val_pct:.1f}%) suggests continuous, hurried vocalization.",
-        "low_exp": "Healthy pause duration ({val_pct:.1f}%) reflects natural respiratory intervals.",
+        "deceptive_exp": "Silence ratio shifted by {val_pct:+.1f}% vs baseline, indicating altered cognitive phrasing and breathing pauses.",
+        "truthful_exp": "Pause ratio aligned with calibration baseline ({val_pct:+.1f}% shift), demonstrating relaxed breathing intervals.",
     },
-    "pause_count": {
-        "title": "Pause Frequency",
-        "unit": "pauses",
-        "high_exp": "Altered pause structure ({val:.0f} breath pauses) indicates modified speech rhythm.",
-        "low_exp": "Regular pause count ({val:.0f} breath pauses) reflects balanced cognitive phrasing.",
-    },
-    "energy_variance": {
-        "title": "RMS Energy Variance",
+    "delta_energy_variance": {
+        "title": "RMS Loudness Modulation (Δ Energy Var)",
         "unit": "",
-        "high_exp": "High loudness modulation indicates dynamic energy surges across spoken phrases.",
-        "low_exp": "Even acoustic energy distribution demonstrates steady volume control.",
+        "deceptive_exp": "Acoustic volume variance shifted ({val:+.4f}) vs neutral responses, reflecting uneven vocal projection.",
+        "truthful_exp": "Loudness envelope remained steady ({val:+.4f} delta vs baseline) across phrases.",
     },
-    "energy_std": {
-        "title": "Loudness Standard Deviation",
+    "delta_energy_std": {
+        "title": "Volume Standard Deviation (Δ Energy Std)",
         "unit": "",
-        "high_exp": "Pronounced volume fluctuations reflect uneven acoustic projection.",
-        "low_exp": "Stable vocal volume indicates relaxed acoustic projection.",
+        "deceptive_exp": "Vocal volume standard deviation changed ({val:+.3f}) relative to calm calibration.",
+        "truthful_exp": "Volume consistency remained uniform ({val:+.3f} delta vs baseline).",
     },
-    "mfcc_1": {
-        "title": "Spectral Energy Distribution (MFCC 1)",
+    "delta_mfcc_1": {
+        "title": "Spectral Resonance Shift (Δ MFCC 1)",
         "unit": "",
-        "high_exp": "Shift in low-frequency spectral envelope consistent with altered vocal tract resonance.",
-        "low_exp": "Balanced acoustic spectral envelope typical of unstrained speech.",
+        "deceptive_exp": "Low-frequency spectral resonance shifted from baseline, consistent with altered vocal tract posture.",
+        "truthful_exp": "Spectral resonance envelope matched neutral baseline calibration.",
     },
-    "mfcc_2": {
-        "title": "Spectral Formant Slope (MFCC 2)",
+    "delta_mfcc_2": {
+        "title": "Vocal Timbre Slope (Δ MFCC 2)",
         "unit": "",
-        "high_exp": "Timbral acoustic coloration indicating altered formant dispersion under tension.",
-        "low_exp": "Standard vocal timbre and relaxed formant dispersion.",
+        "deceptive_exp": "Timbral spectral coloration differed from neutral answers, suggesting altered formant dispersion.",
+        "truthful_exp": "Acoustic timbre and formant slope were maintained from baseline.",
     },
-    "mfcc_3": {
-        "title": "Vocal Timbre Resonance (MFCC 3)",
+    "delta_mfcc_3": {
+        "title": "Harmonic Tilt Resonance (Δ MFCC 3)",
         "unit": "",
-        "high_exp": "Higher frequency harmonic emphasis often accompanying vocal effort.",
-        "low_exp": "Natural harmonic acoustic envelope without tense harmonic tilt.",
+        "deceptive_exp": "Mid-frequency harmonic distribution diverged from calibration speech.",
+        "truthful_exp": "Harmonic distribution showed minimal deviation from calibration speech.",
     },
 }
 
 
-def explain_top_signals(
-    features: Dict[str, float],
-    predicted_score: str,
-    baseline_calm_means: Dict[str, float],
-    baseline_calm_stds: Dict[str, float],
+def explain_delta_signals(
+    delta_features: Dict[str, float],
+    verdict: str,
     feature_importances: Dict[str, float],
     top_k: int = 3,
 ) -> List[TopSignalDict]:
-    """Identify the top K driving acoustic signals and generate plain English explanations.
-
-    Args:
-        features: Dictionary of extracted acoustic features.
-        predicted_score: Model predicted score ('Low', 'Medium', 'High').
-        baseline_calm_means: Mean feature values for baseline calm speech.
-        baseline_calm_stds: Std of feature values for baseline calm speech.
-        feature_importances: Random Forest feature importances.
-        top_k: Number of top driving signals to return (default 3).
-
-    Returns:
-        List of dicts with name, value, and explanation.
-    """
+    """Identify the top K driving delta signals and generate plain English explanations."""
     contributions: List[Tuple[float, str, float]] = []
 
-    for name, value in features.items():
-        base_mean = baseline_calm_means.get(name, value)
-        base_std = max(1e-4, baseline_calm_stds.get(name, 1.0))
+    for name, value in delta_features.items():
         importance = feature_importances.get(name, 0.05)
-
-        # Z-score deviation from calm baseline
-        z_dev = (value - base_mean) / base_std
-
-        # Scoring weight: importance weighted by deviation magnitude
-        if predicted_score in ("High", "Medium"):
-            # Look for signals that deviate most upwards or notably from calm
-            impact_score = importance * abs(z_dev)
+        if verdict == "Deception indicators":
+            score = importance * abs(value)
         else:
-            # Low stress: highlight features closest to or lower than calm baselines
-            impact_score = importance * (1.0 / (1.0 + abs(z_dev)))
+            score = importance / (1.0 + abs(value))
 
-        contributions.append((impact_score, name, z_dev))
+        contributions.append((score, name, value))
 
-    # Sort descending by impact score
     contributions.sort(key=lambda x: x[0], reverse=True)
 
     top_signals: List[TopSignalDict] = []
     seen_categories = set()
 
-    for _, feat_name, z_dev in contributions:
-        # Group similar MFCCs or duplicate pitch metrics so top 3 are diverse
-        category = feat_name.split("_")[0]
+    for _, feat_name, raw_val in contributions:
+        category = feat_name.split("_")[1] if len(feat_name.split("_")) > 1 else feat_name
         if category.startswith("mfcc") and "mfcc" in seen_categories:
             continue
 
-        raw_val = float(features[feat_name])
-        meta = SIGNAL_METADATA.get(
+        meta = DELTA_METADATA.get(
             feat_name,
             {
-                "title": feat_name.replace("_", " ").title(),
+                "title": feat_name.replace("delta_", "Δ ").replace("_", " ").title(),
                 "unit": "",
-                "high_exp": f"Measured value: {raw_val:.3f}",
-                "low_exp": f"Measured value: {raw_val:.3f}",
+                "deceptive_exp": f"Observed shift: {raw_val:+.3f}",
+                "truthful_exp": f"Observed baseline delta: {raw_val:+.3f}",
             },
         )
 
         title = meta["title"]
         val_pct = raw_val * 100.0
 
-        if predicted_score in ("High", "Medium"):
-            exp_template = meta.get("high_exp", f"Observed elevated level: {raw_val:.2f}")
+        if verdict == "Deception indicators":
+            template = meta.get("deceptive_exp", f"Observed shift: {raw_val:+.2f}")
         else:
-            exp_template = meta.get("low_exp", f"Observed calm baseline: {raw_val:.2f}")
+            template = meta.get("truthful_exp", f"Observed shift: {raw_val:+.2f}")
 
         try:
-            explanation = exp_template.format(val=raw_val, val_pct=val_pct)
+            explanation = template.format(val=raw_val, val_pct=val_pct)
         except Exception:
-            explanation = f"Acoustic measurement: {raw_val:.2f}"
+            explanation = f"Observed delta: {raw_val:+.2f}"
 
         top_signals.append(
             {

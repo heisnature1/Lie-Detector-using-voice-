@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { RotateCcw, Volume2, ShieldAlert, Download, Sliders, ChevronDown, ChevronUp } from "lucide-react";
+import { RotateCcw, Volume2, ShieldAlert, Download, Sliders, ChevronDown, ChevronUp, Terminal } from "lucide-react";
 import StressGauge from "./StressGauge";
 import SignalsList from "./SignalsList";
 
@@ -26,7 +26,7 @@ export default function ResultScreen({ result, baselineBlob, testBlob, onReset }
 
   const handleDownloadReport = () => {
     const reportData = {
-      appName: "VoiceStress Analyzer",
+      appName: "VoiceStress DSP Analyzer",
       version: "2.0.0",
       analyzedAt: new Date().toISOString(),
       verdict: result.verdict,
@@ -50,8 +50,8 @@ export default function ResultScreen({ result, baselineBlob, testBlob, onReset }
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* 1. Stress Score Gauge & Verdict */}
+    <div className="space-y-8 animate-fade-in-up">
+      {/* 1. Stress Score Gauge & Hardware Verdict Readout */}
       <StressGauge
         verdict={result.verdict}
         confidence={result.confidence}
@@ -65,52 +65,57 @@ export default function ResultScreen({ result, baselineBlob, testBlob, onReset }
         deltaMetrics={result.delta_metrics}
       />
 
-      {/* 3. Dual Audio Playback Comparison */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Audio Session Verification
-        </h4>
+      {/* 3. Dual Audio Waveform Inspection Player */}
+      <div className="bg-dark-900/90 border border-dark-800 rounded-3xl p-6 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between border-b border-dark-800 pb-3">
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-dark-500 flex items-center gap-2">
+            <Volume2 className="w-4 h-4 text-neon-cyan" />
+            AUDIO TELEMETRY VERIFICATION
+          </span>
+          <span className="text-[10px] font-mono text-neon-mint">DUAL-CHANNEL</span>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {baseUrl && (
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-              <span className="text-xs text-sky-400 font-semibold block mb-2">
-                1. Calibration Baseline ({result.baseline_duration_seconds || "10"}s)
+            <div className="p-4 bg-dark-950 rounded-2xl border border-dark-800 space-y-2">
+              <span className="text-xs font-mono font-bold text-neon-mint block">
+                [CH 01] CALIBRATION BASELINE ({result.baseline_duration_seconds || "10"}s)
               </span>
-              <audio src={baseUrl} controls className="w-full h-8" />
+              <audio src={baseUrl} controls className="w-full h-8 opacity-90" />
             </div>
           )}
 
           {testUrl && (
-            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-              <span className="text-xs text-indigo-400 font-semibold block mb-2">
-                2. Target Inquiry Response ({result.test_duration_seconds || "8"}s)
+            <div className="p-4 bg-dark-950 rounded-2xl border border-dark-800 space-y-2">
+              <span className="text-xs font-mono font-bold text-neon-amber block">
+                [CH 02] TARGET INQUIRY RESPONSE ({result.test_duration_seconds || "8"}s)
               </span>
-              <audio src={testUrl} controls className="w-full h-8" />
+              <audio src={testUrl} controls className="w-full h-8 opacity-90" />
             </div>
           )}
         </div>
       </div>
 
-      {/* 4. Optional Detailed Delta Metrics Drawer */}
+      {/* 4. Detailed Delta Matrix Drawer */}
       {result.delta_metrics && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl overflow-hidden">
+        <div className="bg-dark-900/60 border border-dark-800 rounded-2xl overflow-hidden shadow-lg">
           <button
             onClick={() => setShowDeltas(!showDeltas)}
-            className="w-full p-4 flex items-center justify-between text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+            className="w-full p-4 flex items-center justify-between text-xs font-mono font-bold text-slate-300 hover:text-white transition-colors"
           >
             <span className="flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-sky-400" />
-              Detailed Acoustic Delta Vector (Test − Baseline)
+              <Sliders className="w-4 h-4 text-neon-mint" />
+              FULL 22-DIMENSION ACOUSTIC DELTA MATRIX (&Delta; = TEST − CALIB)
             </span>
-            {showDeltas ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {showDeltas ? <ChevronUp className="w-4 h-4 text-neon-mint" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
           {showDeltas && (
-            <div className="p-4 pt-0 grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs font-mono">
+            <div className="p-4 pt-0 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
               {Object.entries(result.delta_metrics).map(([key, val]) => (
-                <div key={key} className="p-2 bg-slate-950/80 rounded-lg border border-slate-800 flex justify-between">
-                  <span className="text-slate-400 truncate mr-2">{key.replace("delta_", "Δ_")}</span>
-                  <span className={val > 0 ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>
+                <div key={key} className="p-2.5 bg-dark-950/80 rounded-xl border border-dark-800 flex justify-between items-center">
+                  <span className="text-dark-500 truncate mr-2">{key.replace("delta_", "&Delta;_")}</span>
+                  <span className={val > 0 ? "text-neon-coral font-bold" : "text-neon-mint font-bold"}>
                     {val > 0 ? "+" : ""}{val}
                   </span>
                 </div>
@@ -120,30 +125,30 @@ export default function ResultScreen({ result, baselineBlob, testBlob, onReset }
         </div>
       )}
 
-      {/* 5. Action Controls */}
+      {/* 5. Tactical Hardware Action Controls */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
         <button
           onClick={handleDownloadReport}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-xs transition-colors border border-slate-700"
+          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3.5 bg-dark-850 hover:bg-dark-800 text-slate-300 font-mono font-bold rounded-2xl text-xs uppercase tracking-wider transition-all border border-dark-700 shadow-lg transform hover:scale-[1.02] active:scale-95"
         >
-          <Download className="w-3.5 h-3.5" />
-          <span>Export Full JSON Report</span>
+          <Download className="w-4 h-4" />
+          <span>EXPORT TELEMETRY JSON</span>
         </button>
 
         <button
           onClick={onReset}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3.5 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-sky-600/25 transition-all"
+          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3.5 bg-neon-mint hover:bg-neon-mint/90 text-dark-950 font-mono font-bold rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-neon-mint/20 transition-all transform hover:scale-[1.02] active:scale-95"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Start New Calibrated Analysis</span>
+          <RotateCcw className="w-4 h-4" />
+          <span>START NEW SESSION</span>
         </button>
       </div>
 
-      {/* 6. Visible Mandatory Legal & Ethics Disclaimer */}
-      <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-2xl flex items-start gap-3 text-xs text-slate-400">
-        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+      {/* 6. Legal & Ethics Banner */}
+      <div className="p-4 bg-dark-950/90 border border-dark-800 rounded-2xl flex items-start gap-3 text-xs text-dark-500 font-mono">
+        <ShieldAlert className="w-4 h-4 text-neon-amber shrink-0 mt-0.5" />
         <p className="leading-relaxed">
-          <strong className="text-slate-300">Notice:</strong> {result.disclaimer}
+          <strong className="text-slate-400">RESEARCH NOTICE:</strong> {result.disclaimer}
         </p>
       </div>
     </div>

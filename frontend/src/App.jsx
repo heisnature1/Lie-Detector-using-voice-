@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Mic, Database, AlertCircle } from "lucide-react";
+import { Mic, Database, AlertCircle, Terminal, Radio } from "lucide-react";
 import Header from "./components/Header";
 import { DisclaimerBanner, DisclaimerModal } from "./components/Disclaimer";
 import LiveSessionRecorder from "./components/LiveSessionRecorder";
@@ -52,36 +52,42 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-between text-slate-100">
+    <div className="min-h-screen bg-dark-950 bg-grid-dots flex flex-col justify-between text-slate-100 selection:bg-neon-mint selection:text-dark-950 font-sans">
+      {/* Top Header */}
       <Header
         modelInfo={modelInfo}
         onOpenDisclaimer={() => setIsDisclaimerOpen(true)}
       />
 
+      {/* Main Container */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 w-full flex-1">
+        {/* Ethics & Legal Disclaimer Banner */}
         <DisclaimerBanner onOpenModal={() => setIsDisclaimerOpen(true)} />
 
+        {/* Global Error Banner */}
         {errorMessage && (
-          <div className="mb-6 p-4 bg-rose-950/60 border border-rose-500/40 rounded-2xl flex items-start justify-between gap-3 text-sm text-rose-200 shadow-xl">
+          <div className="mb-6 p-4 bg-neon-coral/15 border border-neon-coral/30 rounded-2xl flex items-start justify-between gap-3 text-xs sm:text-sm text-neon-coral shadow-2xl backdrop-blur-md font-mono animate-fade-in-up">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-neon-coral" />
               <div>
-                <p className="font-semibold text-rose-300">Analysis Error</p>
-                <p className="mt-0.5 leading-relaxed">{errorMessage}</p>
+                <p className="font-bold uppercase tracking-wider">ANALYSIS ERROR OCCURRED</p>
+                <p className="mt-1 leading-relaxed text-slate-300 font-sans">{errorMessage}</p>
               </div>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-rose-400 hover:text-white text-xs px-2.5 py-1 rounded bg-rose-900/60 border border-rose-700/60"
+              className="text-xs px-2.5 py-1 rounded-lg bg-dark-900 border border-dark-700 text-neon-coral hover:text-white transition-colors"
             >
-              Dismiss
+              DISMISS
             </button>
           </div>
         )}
 
+        {/* Loading State */}
         {isAnalyzing ? (
           <AnalysisLoader />
         ) : analysisResult ? (
+          /* Results View */
           <ResultScreen
             result={analysisResult}
             baselineBlob={lastBaselineBlob}
@@ -89,21 +95,23 @@ export default function App() {
             onReset={handleReset}
           />
         ) : (
-          <div className="space-y-6">
-            <div className="flex bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 max-w-md mx-auto shadow-inner">
+          /* Primary Mode Flow */
+          <div className="space-y-6 animate-fade-in-up">
+            {/* Tab Selection */}
+            <div className="flex bg-dark-900/90 p-1.5 rounded-2xl border border-dark-800 max-w-md mx-auto shadow-2xl backdrop-blur-md">
               <button
                 onClick={() => {
                   setActiveTab("live");
                   setErrorMessage(null);
                 }}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-xl text-xs font-mono font-bold tracking-wider transition-all transform ${
                   activeTab === "live"
-                    ? "bg-sky-600 text-white shadow-md shadow-sky-600/30"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-neon-mint text-dark-950 shadow-lg shadow-neon-mint/20 scale-[1.02]"
+                    : "text-dark-500 hover:text-slate-200"
                 }`}
               >
-                <Mic className="w-4 h-4" />
-                <span>Live Calibrated Analysis</span>
+                <Radio className="w-4 h-4" />
+                <span>CALIBRATED WORKSTATION</span>
               </button>
 
               <button
@@ -111,17 +119,18 @@ export default function App() {
                   setActiveTab("dataset");
                   setErrorMessage(null);
                 }}
-                className={`flex-1 flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-xl text-xs font-mono font-bold tracking-wider transition-all transform ${
                   activeTab === "dataset"
-                    ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "bg-neon-purple text-white shadow-lg shadow-neon-purple/20 scale-[1.02]"
+                    : "text-dark-500 hover:text-slate-200"
                 }`}
               >
                 <Database className="w-4 h-4" />
-                <span>Data Collection Studio</span>
+                <span>DATA STUDIO</span>
               </button>
             </div>
 
+            {/* Active Panel */}
             {activeTab === "live" ? (
               <>
                 <LiveSessionRecorder
@@ -140,15 +149,17 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-t border-slate-800/80 bg-slate-900/40 py-6 text-center text-xs text-slate-400">
+      {/* Footer */}
+      <footer className="border-t border-dark-850 bg-dark-900/60 py-6 text-center text-xs font-mono text-dark-500">
         <div className="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p>© 2026 VoiceStress Research & Entertainment MVP. All rights reserved.</p>
-          <p className="text-slate-400">
-            Delta acoustic analysis engine powered by librosa & scikit-learn.
+          <p>© 2026 VOICESTRESS // ACOUSTIC RESEARCH WORKSTATION</p>
+          <p className="text-dark-500">
+            ENGINE: PYAV &bull; LIBROSA &bull; SCIKIT-LEARN
           </p>
         </div>
       </footer>
 
+      {/* Disclaimer Modal */}
       <DisclaimerModal
         isOpen={isDisclaimerOpen}
         onClose={() => setIsDisclaimerOpen(false)}

@@ -1,5 +1,5 @@
 import React from "react";
-import { Zap, Volume2, Mic, Activity, Clock, Info } from "lucide-react";
+import { Zap, Volume2, Mic, Activity, Clock, Terminal, ChevronRight } from "lucide-react";
 
 export default function SignalsList({ signals = [], deltaMetrics = null }) {
   const getSignalIcon = (name = "") => {
@@ -13,14 +13,14 @@ export default function SignalsList({ signals = [], deltaMetrics = null }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-dark-800 pb-3">
         <div>
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-400" />
-            Top 3 Driving Delta Signals (Test vs. Baseline)
+          <h3 className="text-base font-bold text-white font-mono flex items-center gap-2">
+            <Terminal className="w-4 h-4 text-neon-mint" />
+            TOP 3 ACOUSTIC DELTA SIGNALS (TEST − BASELINE)
           </h3>
-          <p className="text-xs text-slate-400">
-            Acoustic metrics exhibiting the most significant differential shift from your neutral calibration
+          <p className="text-xs font-mono text-dark-500">
+            Acoustic markers showing highest differential deviation from calibrated resting voice
           </p>
         </div>
       </div>
@@ -32,23 +32,31 @@ export default function SignalsList({ signals = [], deltaMetrics = null }) {
           return (
             <div
               key={idx}
-              className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4.5 flex flex-col justify-between hover:border-slate-700 transition-all shadow-lg"
+              className="bg-dark-900/90 border border-dark-800 hover:border-dark-700 rounded-2xl p-4.5 flex flex-col justify-between transition-all shadow-xl hover:translate-y-[-2px] relative overflow-hidden group animate-fade-in-up"
+              style={{ animationDelay: `${(idx * 120)}ms` }}
             >
+              {/* Top accent line */}
+              <div
+                className={`absolute top-0 left-0 h-1 w-full ${
+                  isPositive ? "bg-neon-coral/80" : "bg-neon-mint/80"
+                }`}
+              />
+
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center">
-                      <Icon className="w-4 h-4 text-sky-400" />
+                    <div className="w-8 h-8 rounded-lg bg-dark-800 border border-dark-700 flex items-center justify-center text-neon-mint group-hover:scale-110 transition-transform">
+                      <Icon className="w-4 h-4" />
                     </div>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
-                      Rank #{idx + 1}
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-dark-950 text-dark-500 border border-dark-800">
+                      RANK #{idx + 1}
                     </span>
                   </div>
                   <span
-                    className={`text-xs font-mono font-bold px-2 py-1 rounded ${
+                    className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
                       isPositive
-                        ? "bg-rose-500/10 text-rose-300 border border-rose-500/20"
-                        : "bg-slate-800 text-sky-300"
+                        ? "bg-neon-coral/10 text-neon-coral border-neon-coral/30"
+                        : "bg-neon-mint/10 text-neon-mint border-neon-mint/30"
                     }`}
                   >
                     {typeof signal.value === "number"
@@ -57,29 +65,22 @@ export default function SignalsList({ signals = [], deltaMetrics = null }) {
                   </span>
                 </div>
 
-                <h4 className="text-sm font-bold text-slate-100 mb-1.5 leading-snug">
+                <h4 className="text-sm font-bold text-white mb-2 leading-snug font-mono">
                   {signal.name}
                 </h4>
 
-                <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                <p className="text-xs text-slate-300 leading-relaxed bg-dark-950/80 p-3 rounded-xl border border-dark-850">
                   {signal.explanation}
                 </p>
               </div>
 
-              <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
-                <span>Delta Component</span>
-                <span className="text-slate-300 font-mono">Test − Baseline</span>
+              <div className="mt-3.5 pt-2.5 border-t border-dark-800 flex items-center justify-between text-[10px] font-mono text-dark-500">
+                <span>PHYSIOLOGICAL CORRELATE</span>
+                <span className="text-slate-300 font-bold">Laryngeal / Autonomic</span>
               </div>
             </div>
           );
         })}
-      </div>
-
-      <div className="p-3 bg-slate-900/40 rounded-xl border border-slate-800/60 flex items-start gap-2.5 text-xs text-slate-400">
-        <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
-        <p>
-          Individual voice baseline variation is filtered out by comparing the test statement directly against your neutral calibration clip.
-        </p>
       </div>
     </div>
   );

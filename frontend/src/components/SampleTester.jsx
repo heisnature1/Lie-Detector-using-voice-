@@ -1,142 +1,174 @@
 import React, { useState } from "react";
-import { Sparkles, CheckCircle2, AlertTriangle, Terminal } from "lucide-react";
+import { Sparkles, Play, ShieldCheck, AlertTriangle, ArrowRight, Activity, Waves } from "lucide-react";
+import Card3D from "./Card3D";
 
-function audioBufferToWavBlob(buffer) {
-  const numChannels = 1;
-  const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
-  const bitDepth = 16;
-  const samples = buffer.getChannelData(0);
-  const dataLength = samples.length * (bitDepth / 8);
-  const bufferLength = 44 + dataLength;
+export default function SampleTester({ onAnalyzePair, isLoading }) {
+  const [selectedDemo, setSelectedDemo] = useState("truthful");
 
-  const arrayBuffer = new ArrayBuffer(bufferLength);
-  const view = new DataView(arrayBuffer);
+  // Synthetic audio generator utility for 1-click demo runs
+  const generateSyntheticToneAudio = (isStressed = false, durationSec = 6) => {
+    const sampleRate = 16000;
+    const numSamples = sampleRate * durationSec;
+    const audioContext = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+      1,
+      numSamples,
+      sampleRate
+    );
 
-  function writeString(view, offset, string) {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
-    }
-  }
+    const buffer = audioContext.createBuffer(1, numSamples, sampleRate);
+    const data = buffer.getChannelData(0);
 
-  writeString(view, 0, "RIFF");
-  view.setUint32(4, 36 + dataLength, true);
-  writeString(view, 8, "WAVE");
-  writeString(view, 12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, format, true);
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
-  view.setUint16(32, numChannels * (bitDepth / 8), true);
-  view.setUint16(34, bitDepth, true);
-  writeString(view, 36, "data");
-  view.setUint32(40, dataLength, true);
+    const baseFreq = isStressed ? 210 : 130;
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      // Speech envelope simulation
+      const envelope = Math.sin((t / durationSec) * Math.PI) * 0.8;
+      const jitter = isStressed ? Math.sin(t * 80) * 0.15 : 0.02;
+      const freq = baseFreq + Math.sin(t * 5) * (isStressed ? 35 : 8) + jitter * 20;
 
-  let offset = 44;
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    offset += 2;
-  }
+      // Harmonically rich pseudo-vocal source
+      const wave1 = Math.sin(2 * Math.PI * freq * t);
+      const wave2 = 0.4 * Math.sin(2 * Math.PI * freq * 2 * t);
+      const wave3 = 0.2 * Math.sin(2 * Math.PI * freq * 3 * t);
+      const noise = (Math.random() - 0.5) * (isStressed ? 0.08 : 0.02);
 
-  return new Blob([view], { type: "audio/wav" });
-}
-
-function synthesizeClip(ctx, baseFreq, jitterAmp, modDepth, syllableRate, pauseDensity, duration = 8.0) {
-  const sr = ctx.sampleRate;
-  const totalSamples = Math.floor(sr * duration);
-  const buffer = ctx.createBuffer(1, totalSamples, sr);
-  const data = buffer.getChannelData(0);
-
-  let phase = 0;
-  for (let i = 0; i < totalSamples; i++) {
-    const t = i / sr;
-    const pitchMod = 1.0 + modDepth * Math.sin(2 * Math.PI * 3.0 * t);
-    const jitter = (Math.random() - 0.5) * jitterAmp;
-    const instPitch = baseFreq * pitchMod * (1.0 + jitter);
-
-    phase += (2 * Math.PI * instPitch) / sr;
-    const wave =
-      0.5 * Math.sin(phase) +
-      0.25 * Math.sin(2 * phase) +
-      0.15 * Math.sin(3 * phase);
-
-    const cycle = (t * syllableRate) % 1.0;
-    const envelope = cycle < (1.0 - pauseDensity) ? Math.sin((cycle / (1.0 - pauseDensity)) * Math.PI) : 0.0;
-    const noise = (Math.random() - 0.5) * 0.01;
-
-    data[i] = wave * envelope * 0.8 + noise;
-  }
-
-  return audioBufferToWavBlob(buffer);
-}
-
-export default function SampleTester({ onSessionReady, isAnalyzing }) {
-  const [loadingType, setLoadingType] = useState(null);
-
-  const generateAndTest = (type) => {
-    setLoadingType(type);
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioCtx({ sampleRate: 16000 });
-
-    const baselineBlob = synthesizeClip(ctx, 130.0, 0.004, 0.02, 2.1, 0.26, 10.0);
-
-    let testBlob;
-    if (type === "Truthful") {
-      testBlob = synthesizeClip(ctx, 132.0, 0.005, 0.025, 2.2, 0.25, 8.0);
-    } else {
-      testBlob = synthesizeClip(ctx, 185.0, 0.038, 0.12, 4.2, 0.10, 8.0);
+      data[i] = (wave1 + wave2 + wave3 + noise) * envelope;
     }
 
-    setLoadingType(null);
-    onSessionReady(baselineBlob, testBlob);
+    // Convert AudioBuffer to WAV Blob
+    const wavBlob = audioBufferToWavBlob(buffer);
+    return wavBlob;
+  };
+
+  const audioBufferToWavBlob = (audioBuffer) => {
+    const numOfChan = audioBuffer.numberOfChannels;
+    const length = audioBuffer.length * numOfChan * 2 + 44;
+    const out = new DataView(new ArrayBuffer(length));
+    const channels = [];
+    let sampleRate = audioBuffer.sampleRate;
+    let offset = 0;
+    let pos = 0;
+
+    function setUint16(data) {
+      out.setUint16(pos, data, true);
+      pos += 2;
+    }
+    function setUint32(data) {
+      out.setUint32(pos, data, true);
+      pos += 4;
+    }
+
+    // RIFF chunk descriptor
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8);
+    setUint32(0x45564157); // "WAVE"
+
+    // FMT sub-chunk
+    setUint32(0x20746d66); // "fmt "
+    setUint32(16); // 16 for PCM
+    setUint16(1); // PCM format
+    setUint16(numOfChan);
+    setUint32(sampleRate);
+    setUint32(sampleRate * 2 * numOfChan); // byte rate
+    setUint16(numOfChan * 2); // block align
+    setUint16(16); // 16-bit
+
+    // Data sub-chunk
+    setUint32(0x61746164); // "data"
+    setUint32(length - pos - 4);
+
+    for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
+      channels.push(audioBuffer.getChannelData(i));
+    }
+
+    while (pos < length) {
+      for (let i = 0; i < numOfChan; i++) {
+        let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+        out.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return new Blob([out.buffer], { type: "audio/wav" });
+  };
+
+  const handleRunDemo = (mode) => {
+    setSelectedDemo(mode);
+    const baselineBlob = generateSyntheticToneAudio(false, 6);
+    const testBlob = generateSyntheticToneAudio(mode === "stressed", 6);
+    onAnalyzePair(baselineBlob, testBlob);
   };
 
   return (
-    <div className="bg-dark-900/60 border border-dark-800 rounded-3xl p-6 text-center mt-6 backdrop-blur-md">
-      <div className="flex items-center justify-center space-x-2 text-xs font-mono font-bold text-dark-500 uppercase tracking-widest mb-1.5">
-        <Terminal className="w-3.5 h-3.5 text-neon-cyan" />
-        <span>HARDWARE DEMO PRESETS // ONE-CLICK EVALUATION</span>
+    <div className="space-y-6">
+      <div className="border-b border-studio-800 pb-4">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-accent-amber" />
+          Synthetic Session Benchmarking
+        </h3>
+        <p className="text-xs text-studio-400 mt-1">
+          Instantly evaluate the calibration model using synthesised vocal acoustic pairs without needing a live microphone.
+        </p>
       </div>
-      <p className="text-xs font-mono text-dark-500 mb-5 max-w-lg mx-auto">
-        Test calibrated delta feature modeling using pre-computed synthetic session pairs:
-      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-w-xl mx-auto">
-        <button
-          onClick={() => generateAndTest("Truthful")}
-          disabled={isAnalyzing}
-          className="p-4 bg-dark-850 hover:bg-dark-800 border border-neon-mint/30 hover:border-neon-mint/60 rounded-2xl text-left transition-all group disabled:opacity-50 relative overflow-hidden transform hover:scale-[1.02] active:scale-95 shadow-lg"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-mono font-bold text-neon-mint flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" />
-              PRESET 01: TRUTHFUL-LEANING
-            </span>
-            <span className="text-[10px] text-dark-500 font-mono">10s + 8s</span>
-          </div>
-          <p className="text-xs text-slate-300 leading-snug font-sans">
-            Minimal pitch delta (&Delta;F0 &approx; 0 Hz), steady vocal shimmer, natural breath intervals.
-          </p>
-        </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Option 1: Truthful Simulation */}
+        <Card3D depth={10} className="glass-panel glass-panel-hover rounded-2xl p-6 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-accent-emerald/15 text-accent-emerald border border-accent-emerald/30">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Benchmark Pair A
+              </span>
+              <span className="text-xs font-mono text-studio-400">$\Delta \approx 0$</span>
+            </div>
 
-        <button
-          onClick={() => generateAndTest("Deceptive")}
-          disabled={isAnalyzing}
-          className="p-4 bg-dark-850 hover:bg-dark-800 border border-neon-coral/30 hover:border-neon-coral/60 rounded-2xl text-left transition-all group disabled:opacity-50 relative overflow-hidden transform hover:scale-[1.02] active:scale-95 shadow-lg"
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-mono font-bold text-neon-coral flex items-center gap-1.5">
-              <AlertTriangle className="w-4 h-4" />
-              PRESET 02: DECEPTION INDICATORS
-            </span>
-            <span className="text-[10px] text-dark-500 font-mono">10s + 8s</span>
+            <h4 className="text-base font-bold text-white">Truthful-Leaning Simulation</h4>
+            <p className="text-xs text-studio-300 leading-relaxed bg-studio-950/70 p-3 rounded-xl border border-white/5">
+              Simulates a test statement that remains acoustically identical to the neutral calibration baseline ($F_0$ delta &lt; 5 Hz, minimal jitter delta).
+            </p>
           </div>
-          <p className="text-xs text-slate-300 leading-snug font-sans">
-            Elevated pitch delta (&Delta;F0 &gt; +50 Hz), high jitter micro-tremors, accelerated pacing.
-          </p>
-        </button>
+
+          <button
+            type="button"
+            onClick={() => handleRunDemo("truthful")}
+            disabled={isLoading}
+            className="mt-5 btn-3d w-full py-3 rounded-xl bg-accent-emerald/20 hover:bg-accent-emerald/30 text-accent-emerald font-bold text-xs flex items-center justify-center gap-2 border border-accent-emerald/40"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            {isLoading && selectedDemo === "truthful" ? "Running Analysis..." : "Simulate Truthful Baseline"}
+          </button>
+        </Card3D>
+
+        {/* Option 2: Stressed Simulation */}
+        <Card3D depth={10} className="glass-panel glass-panel-hover rounded-2xl p-6 flex flex-col justify-between">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-accent-rose/15 text-accent-rose border border-accent-rose/30">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Benchmark Pair B
+              </span>
+              <span className="text-xs font-mono text-studio-400">$\Delta \gt +80\text{Hz}$</span>
+            </div>
+
+            <h4 className="text-base font-bold text-white">Elevated Stress Indicators</h4>
+            <p className="text-xs text-studio-300 leading-relaxed bg-studio-950/70 p-3 rounded-xl border border-white/5">
+              Simulates an acute vocal stress response with marked pitch elevation, micro-jitter perturbation, and high-frequency spectral flux.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleRunDemo("stressed")}
+            disabled={isLoading}
+            className="mt-5 btn-3d w-full py-3 rounded-xl bg-accent-rose/20 hover:bg-accent-rose/30 text-accent-rose font-bold text-xs flex items-center justify-center gap-2 border border-accent-rose/40"
+          >
+            <Play className="w-3.5 h-3.5 fill-current" />
+            {isLoading && selectedDemo === "stressed" ? "Running Analysis..." : "Simulate Stressed Divergence"}
+          </button>
+        </Card3D>
       </div>
     </div>
   );

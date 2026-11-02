@@ -1,131 +1,132 @@
 import React from "react";
-import { CheckCircle2, AlertTriangle, ShieldCheck, Activity, Gauge } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ShieldCheck, Gauge, Activity } from "lucide-react";
+import Card3D from "./Card3D";
 
 export default function StressGauge({ verdict, confidence, baselineDuration, testDuration }) {
   const isTruthful = verdict === "Truthful-leaning";
   const confPct = Math.round((confidence || 0.85) * 100);
 
+  // Calculate needle rotation angle (-90deg for Truthful far left, +90deg for Deception far right)
+  const needleAngle = isTruthful
+    ? -75 + (1 - (confidence || 0.8)) * 50
+    : 15 + ((confidence || 0.8) - 0.5) * 130;
+
   const theme = isTruthful
     ? {
-        border: "border-neon-mint/30",
-        bg: "bg-dark-900/90",
-        badgeBg: "bg-neon-mint/10 border-neon-mint/30 text-neon-mint",
-        glowClass: "glow-mint",
-        accentText: "text-neon-mint",
-        verdictTitle: "TRUTHFUL-LEANING",
-        verdictSub: "NOMINAL BASELINE DELTA",
+        border: "border-accent-emerald/30",
+        badge: "bg-accent-emerald/15 text-accent-emerald border-accent-emerald/30",
+        accentColor: "#10b981",
+        glow: "shadow-glow-emerald",
+        title: "Truthful-Leaning",
+        subtitle: "Minimal acoustic delta shift detected",
         summary:
-          "Acoustic delta metrics showed minimal divergence from your neutral calibration. Laryngeal pitch, cycle-to-cycle frequency perturbations (jitter), and syllable pacing matched calm speech baselines.",
+          "Vocal acoustics during the statement closely matched your neutral calibration baseline. Fundamental pitch, micro-frequency instability (jitter), and syllable rhythm showed relaxed, unstrained neuromuscular control.",
       }
     : {
-        border: "border-neon-coral/30",
-        bg: "bg-dark-900/90",
-        badgeBg: "bg-neon-coral/10 border-neon-coral/30 text-neon-coral",
-        glowClass: "glow-coral",
-        accentText: "text-neon-coral",
-        verdictTitle: "DECEPTION INDICATORS",
-        verdictSub: "ELEVATED STRESS DELTA DETECTED",
+        border: "border-accent-rose/30",
+        badge: "bg-accent-rose/15 text-accent-rose border-accent-rose/30",
+        accentColor: "#f43f5e",
+        glow: "shadow-glow-rose",
+        title: "Elevated Stress Indicators",
+        subtitle: "Significant differential stress shift detected",
         summary:
-          "Differential acoustic analysis detected significant upward shifts in vocal cord tension. Fundamental pitch surge, elevated frequency jitter micro-tremors, and hurried syllable pacing were observed during the response.",
+          "Pronounced acoustic divergence detected relative to your resting baseline. Notable fundamental frequency ($F_0$) rise, elevated vocal fold micro-tremors (jitter), and accelerated speech pacing were measured during the response.",
       };
 
-  // Generate 24 LED segments for the hardware VU meter
-  const totalSegments = 24;
-  const activeSegments = isTruthful
-    ? Math.max(3, Math.floor((1 - (confidence || 0.5) * 0.3) * (totalSegments / 2)))
-    : Math.min(totalSegments, Math.floor((totalSegments / 2) + ((confidence || 0.5) * (totalSegments / 2))));
-
   return (
-    <div className={`p-6 sm:p-8 rounded-3xl border ${theme.border} ${theme.bg} ${theme.glowClass} transition-all relative overflow-hidden backdrop-blur-xl animate-fade-in-up`}>
-      {/* Corner Bracket Hardware Accents */}
-      <div className="absolute top-3 left-3 text-[10px] font-mono text-dark-600 select-none">[ + ]</div>
-      <div className="absolute top-3 right-3 text-[10px] font-mono text-dark-600 select-none">[ + ]</div>
-      <div className="absolute bottom-3 left-3 text-[10px] font-mono text-dark-600 select-none">[ + ]</div>
-      <div className="absolute bottom-3 right-3 text-[10px] font-mono text-dark-600 select-none">[ + ]</div>
+    <Card3D depth={12} className={`rounded-3xl glass-panel ${theme.border} p-6 sm:p-8 ${theme.glow}`}>
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+        {/* Left Side: 3D Radial Dial */}
+        <div className="relative w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center shrink-0">
+          {/* Metallic Dial Outer Ring */}
+          <div className="absolute inset-0 rounded-full border border-white/10 bg-gradient-to-br from-studio-800 to-studio-950 shadow-2xl flex items-center justify-center p-3">
+            {/* Inner Recessed Bezel */}
+            <div className="w-full h-full rounded-full border border-black/40 bg-studio-900 shadow-inner relative flex items-center justify-center">
+              {/* Dial Tick Marks SVG */}
+              <svg className="w-full h-full p-2" viewBox="0 0 100 100">
+                {/* Background Arc */}
+                <path
+                  d="M 20 80 A 40 40 0 1 1 80 80"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.08)"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                />
+                {/* Active Colored Arc */}
+                <path
+                  d={
+                    isTruthful
+                      ? "M 20 80 A 40 40 0 0 1 50 10"
+                      : "M 50 10 A 40 40 0 0 1 80 80"
+                  }
+                  fill="none"
+                  stroke={theme.accentColor}
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  className="transition-all duration-700"
+                />
+              </svg>
 
-      {/* Main Header / Status Readout */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 mb-6">
-        <div className="flex items-center space-x-4">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${theme.badgeBg} shadow-inner`}>
-            {isTruthful ? (
-              <CheckCircle2 className="w-7 h-7 text-neon-mint" />
-            ) : (
-              <AlertTriangle className="w-7 h-7 text-neon-coral animate-pulse" />
+              {/* 3D Animated Needle with Pivot */}
+              <div
+                className="absolute inset-0 flex items-center justify-center transition-transform duration-700 ease-out"
+                style={{ transform: `rotate(${needleAngle}deg)` }}
+              >
+                <div
+                  className="w-1.5 h-20 rounded-full origin-bottom relative shadow-lg"
+                  style={{
+                    backgroundColor: theme.accentColor,
+                    boxShadow: `0 0 10px ${theme.accentColor}`,
+                    transform: "translateY(-24px)",
+                  }}
+                />
+              </div>
+
+              {/* Center Metal Cap */}
+              <div className="absolute w-8 h-8 rounded-full bg-gradient-to-br from-studio-700 to-studio-950 border border-white/20 shadow-xl flex items-center justify-center z-10">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: theme.accentColor }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side: Verdict Details & Plain English Breakdown */}
+        <div className="flex-1 space-y-4 text-center md:text-left">
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${theme.badge}`}>
+              {isTruthful ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-accent-emerald" />
+              ) : (
+                <AlertTriangle className="w-3.5 h-3.5 text-accent-rose" />
+              )}
+              {isTruthful ? "Stable Delta" : "Stress Surge"}
+            </span>
+
+            <span className="text-xs font-mono text-studio-400 bg-studio-850 px-2.5 py-1 rounded-full border border-studio-700/60">
+              {confPct}% Model Confidence
+            </span>
+
+            {testDuration && (
+              <span className="text-xs font-mono text-studio-400 bg-studio-850 px-2.5 py-1 rounded-full border border-studio-700/60">
+                {testDuration}s Test Response
+              </span>
             )}
           </div>
+
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-dark-500 font-bold">
-                DIFFERENTIAL VERDICT
-              </span>
-              <span className={`w-2 h-2 rounded-full ${isTruthful ? "bg-neon-mint" : "bg-neon-coral"} animate-ping`} />
-            </div>
-            <h2 className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-mono ${theme.accentText}`}>
-              {theme.verdictTitle}
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              {theme.title}
             </h2>
-            <p className="text-xs font-mono text-slate-400 mt-0.5">
-              {theme.verdictSub}
+            <p className="text-xs text-studio-400 font-medium mt-0.5">
+              {theme.subtitle}
             </p>
           </div>
-        </div>
 
-        {/* Telemetry Chips */}
-        <div className="flex items-center space-x-3 bg-dark-950/80 p-3 rounded-2xl border border-dark-800 self-start sm:self-auto font-mono">
-          <div className="text-right px-2">
-            <span className="text-[10px] uppercase text-dark-500 block font-bold">CONFIDENCE</span>
-            <span className={`text-xl font-extrabold ${theme.accentText}`}>{confPct}%</span>
-          </div>
-          {testDuration && (
-            <div className="border-l border-dark-800 pl-3 pr-2 text-right">
-              <span className="text-[10px] uppercase text-dark-500 block font-bold">TEST DURATION</span>
-              <span className="text-base font-bold text-slate-200">{testDuration}s</span>
-            </div>
-          )}
+          <p className="text-xs sm:text-sm text-studio-200/90 leading-relaxed bg-studio-950/60 p-4 rounded-2xl border border-white/5">
+            {theme.summary}
+          </p>
         </div>
       </div>
-
-      {/* Hardware LED Segmented VU Meter */}
-      <div className="space-y-2 mb-5">
-        <div className="flex justify-between items-center text-[11px] font-mono font-bold text-dark-500">
-          <span className={isTruthful ? "text-neon-mint flex items-center gap-1.5" : "text-dark-500"}>
-            <span className="w-1.5 h-1.5 rounded-full bg-neon-mint" />
-            TRUTHFUL-LEANING (LOW DELTA)
-          </span>
-          <span className={!isTruthful ? "text-neon-coral flex items-center gap-1.5" : "text-dark-500"}>
-            DECEPTION INDICATORS (STRESS SURGE)
-            <span className="w-1.5 h-1.5 rounded-full bg-neon-coral" />
-          </span>
-        </div>
-
-        {/* 24 Segment LED Bar */}
-        <div className="h-4 w-full bg-dark-950 rounded-xl p-1 flex gap-1 border border-dark-800 items-center">
-          {Array.from({ length: totalSegments }).map((_, idx) => {
-            const isActive = idx < activeSegments;
-            const isDangerZone = idx >= totalSegments / 2;
-            let barColor = "bg-dark-800";
-
-            if (isActive) {
-              if (isDangerZone) {
-                barColor = "bg-neon-coral shadow-[0_0_8px_rgba(255,51,102,0.8)]";
-              } else {
-                barColor = "bg-neon-mint shadow-[0_0_8px_rgba(0,245,155,0.8)]";
-              }
-            }
-
-            return (
-              <div
-                key={idx}
-                className={`flex-1 h-full rounded-sm transition-all duration-300 ${barColor}`}
-              />
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Laboratory Acoustic Summary */}
-      <div className="p-4 bg-dark-950/70 rounded-2xl border border-dark-800/80 text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">
-        {theme.summary}
-      </div>
-    </div>
+    </Card3D>
   );
 }

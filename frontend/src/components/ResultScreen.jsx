@@ -1,155 +1,90 @@
-import React, { useState, useEffect } from "react";
-import { RotateCcw, Volume2, ShieldAlert, Download, Sliders, ChevronDown, ChevronUp, Terminal } from "lucide-react";
+import React from "react";
+import { RotateCcw, Download, ShieldAlert, FileText, CheckCircle2, Mic, Activity } from "lucide-react";
 import StressGauge from "./StressGauge";
 import SignalsList from "./SignalsList";
+import Card3D from "./Card3D";
 
-export default function ResultScreen({ result, baselineBlob, testBlob, onReset }) {
-  const [baseUrl, setBaseUrl] = useState(null);
-  const [testUrl, setTestUrl] = useState(null);
-  const [showDeltas, setShowDeltas] = useState(false);
+export default function ResultScreen({ result, onReset }) {
+  if (!result) return null;
 
-  useEffect(() => {
-    if (baselineBlob) {
-      const url = URL.createObjectURL(baselineBlob);
-      setBaseUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-  }, [baselineBlob]);
+  const { verdict, confidence, top_signals = [], disclaimer, baseline_duration_s, test_duration_s, delta_metrics } = result;
 
-  useEffect(() => {
-    if (testBlob) {
-      const url = URL.createObjectURL(testBlob);
-      setTestUrl(url);
-      return () => URL.revokeObjectURL(url);
-    }
-  }, [testBlob]);
-
-  const handleDownloadReport = () => {
-    const reportData = {
-      appName: "VoiceStress DSP Analyzer",
-      version: "2.0.0",
-      analyzedAt: new Date().toISOString(),
-      verdict: result.verdict,
-      confidence: result.confidence,
-      baseline_duration_seconds: result.baseline_duration_seconds,
-      test_duration_seconds: result.test_duration_seconds,
-      top_signals: result.top_signals,
-      delta_metrics: result.delta_metrics,
-      disclaimer: result.disclaimer,
-    };
-
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `voicestress_verdict_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportJSON = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `voice-stress-analysis-${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
-      {/* 1. Stress Score Gauge & Hardware Verdict Readout */}
+    <div className="space-y-6 animate-fadeIn">
+      {/* 3D Radial Gauge Result Summary */}
       <StressGauge
-        verdict={result.verdict}
-        confidence={result.confidence}
-        baselineDuration={result.baseline_duration_seconds}
-        testDuration={result.test_duration_seconds}
+        verdict={verdict}
+        confidence={confidence}
+        baselineDuration={baseline_duration_s}
+        testDuration={test_duration_s}
       />
 
-      {/* 2. Top 3 Driving Delta Signals */}
-      <SignalsList
-        signals={result.top_signals}
-        deltaMetrics={result.delta_metrics}
-      />
+      {/* Top Driving Delta Signals */}
+      <SignalsList signals={top_signals} deltaMetrics={delta_metrics} />
 
-      {/* 3. Dual Audio Waveform Inspection Player */}
-      <div className="bg-dark-900/90 border border-dark-800 rounded-3xl p-6 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between border-b border-dark-800 pb-3">
-          <span className="text-xs font-mono font-bold uppercase tracking-wider text-dark-500 flex items-center gap-2">
-            <Volume2 className="w-4 h-4 text-neon-cyan" />
-            AUDIO TELEMETRY VERIFICATION
-          </span>
-          <span className="text-[10px] font-mono text-neon-mint">DUAL-CHANNEL</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {baseUrl && (
-            <div className="p-4 bg-dark-950 rounded-2xl border border-dark-800 space-y-2">
-              <span className="text-xs font-mono font-bold text-neon-mint block">
-                [CH 01] CALIBRATION BASELINE ({result.baseline_duration_seconds || "10"}s)
-              </span>
-              <audio src={baseUrl} controls className="w-full h-8 opacity-90" />
-            </div>
-          )}
-
-          {testUrl && (
-            <div className="p-4 bg-dark-950 rounded-2xl border border-dark-800 space-y-2">
-              <span className="text-xs font-mono font-bold text-neon-amber block">
-                [CH 02] TARGET INQUIRY RESPONSE ({result.test_duration_seconds || "8"}s)
-              </span>
-              <audio src={testUrl} controls className="w-full h-8 opacity-90" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 4. Detailed Delta Matrix Drawer */}
-      {result.delta_metrics && (
-        <div className="bg-dark-900/60 border border-dark-800 rounded-2xl overflow-hidden shadow-lg">
-          <button
-            onClick={() => setShowDeltas(!showDeltas)}
-            className="w-full p-4 flex items-center justify-between text-xs font-mono font-bold text-slate-300 hover:text-white transition-colors"
-          >
-            <span className="flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-neon-mint" />
-              FULL 22-DIMENSION ACOUSTIC DELTA MATRIX (&Delta; = TEST − CALIB)
-            </span>
-            {showDeltas ? <ChevronUp className="w-4 h-4 text-neon-mint" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-
-          {showDeltas && (
-            <div className="p-4 pt-0 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
-              {Object.entries(result.delta_metrics).map(([key, val]) => (
-                <div key={key} className="p-2.5 bg-dark-950/80 rounded-xl border border-dark-800 flex justify-between items-center">
-                  <span className="text-dark-500 truncate mr-2">{key.replace("delta_", "&Delta;_")}</span>
-                  <span className={val > 0 ? "text-neon-coral font-bold" : "text-neon-mint font-bold"}>
-                    {val > 0 ? "+" : ""}{val}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Acoustic Delta Comparison Details */}
+      {delta_metrics && (
+        <Card3D depth={8} className="glass-panel rounded-2xl p-6">
+          <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-accent-teal" />
+            Extracted Differential Features ($\Delta = \text{Test} - \text{Baseline}$)
+          </h4>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            {Object.entries(delta_metrics).slice(0, 8).map(([key, val]) => (
+              <div key={key} className="bg-studio-950/80 p-3 rounded-xl border border-white/5">
+                <span className="text-studio-400 block truncate text-[11px] font-mono">
+                  {key.replace("delta_", "")}
+                </span>
+                <span className={`font-mono font-bold text-sm ${typeof val === "number" && val > 0 ? "text-accent-rose" : "text-accent-emerald"}`}>
+                  {typeof val === "number" ? (val > 0 ? `+${val.toFixed(3)}` : val.toFixed(3)) : val}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card3D>
       )}
 
-      {/* 5. Tactical Hardware Action Controls */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-        <button
-          onClick={handleDownloadReport}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-6 py-3.5 bg-dark-850 hover:bg-dark-800 text-slate-300 font-mono font-bold rounded-2xl text-xs uppercase tracking-wider transition-all border border-dark-700 shadow-lg transform hover:scale-[1.02] active:scale-95"
-        >
-          <Download className="w-4 h-4" />
-          <span>EXPORT TELEMETRY JSON</span>
-        </button>
-
-        <button
-          onClick={onReset}
-          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3.5 bg-neon-mint hover:bg-neon-mint/90 text-dark-950 font-mono font-bold rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-neon-mint/20 transition-all transform hover:scale-[1.02] active:scale-95"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>START NEW SESSION</span>
-        </button>
+      {/* Mandatory Scientific & Ethical Disclaimer Banner */}
+      <div className="bg-studio-950/90 border border-amber-500/30 rounded-2xl p-5 text-studio-300 text-xs flex items-start gap-3.5 shadow-lg">
+        <ShieldAlert className="w-5 h-5 text-accent-amber shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="font-bold text-accent-amber">Scientific & Practical Limitation Notice</p>
+          <p className="leading-relaxed text-studio-300">
+            {disclaimer ||
+              "This system measures differential acoustic stress indicators between a neutral baseline and a test response. Acoustic stress correlates with emotional arousal, cognitive load, or nervousness, but is NOT a scientifically definitive indicator of deception. Never use this system for employment, legal, relationship, or accusatory decisions."}
+          </p>
+        </div>
       </div>
 
-      {/* 6. Legal & Ethics Banner */}
-      <div className="p-4 bg-dark-950/90 border border-dark-800 rounded-2xl flex items-start gap-3 text-xs text-dark-500 font-mono">
-        <ShieldAlert className="w-4 h-4 text-neon-amber shrink-0 mt-0.5" />
-        <p className="leading-relaxed">
-          <strong className="text-slate-400">RESEARCH NOTICE:</strong> {result.disclaimer}
-        </p>
+      {/* Action Footer */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-studio-800">
+        <button
+          type="button"
+          onClick={onReset}
+          className="btn-3d px-6 py-3 rounded-xl bg-studio-800 hover:bg-studio-700 text-white font-bold text-xs flex items-center gap-2 border border-studio-600/60 shadow-lg"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Run Another Analysis
+        </button>
+
+        <button
+          type="button"
+          onClick={exportJSON}
+          className="btn-3d px-6 py-3 rounded-xl bg-studio-100 hover:bg-white text-studio-950 font-bold text-xs flex items-center gap-2 border border-studio-300 shadow-lg"
+        >
+          <Download className="w-4 h-4" />
+          Export JSON Session Report
+        </button>
       </div>
     </div>
   );

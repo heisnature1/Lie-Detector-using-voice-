@@ -8,15 +8,15 @@ class TopSignal(BaseModel):
     """Acoustic feature driving the stress score with natural language explanation."""
 
     name: str = Field(..., description="Human-friendly name of the vocal signal")
-    value: float = Field(..., description="Extracted numerical value")
+    value: float = Field(..., description="Extracted numerical value or delta shift")
     explanation: str = Field(..., description="Plain-English explanation of why this signal matters")
 
 
-class AnalysisResponse(BaseModel):
-    """Response returned by POST /analyze endpoint."""
+class SessionAnalysisResponse(BaseModel):
+    """Response returned by POST /analyze/session endpoint."""
 
-    score: Literal["Low", "Medium", "High"] = Field(
-        ..., description="Vocal stress likelihood classification"
+    verdict: Literal["Truthful-leaning", "Deception indicators"] = Field(
+        ..., description="Binary classification verdict"
     )
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Model prediction confidence score (0.0 to 1.0)"
@@ -25,7 +25,36 @@ class AnalysisResponse(BaseModel):
         ...,
         min_length=1,
         max_length=5,
-        description="Top contributing vocal signals driving the classification",
+        description="Top contributing delta acoustic signals driving the classification",
+    )
+    baseline_duration_seconds: Optional[float] = Field(
+        None, description="Analyzed calibration baseline duration in seconds"
+    )
+    test_duration_seconds: Optional[float] = Field(
+        None, description="Analyzed test response duration in seconds"
+    )
+    delta_metrics: Optional[Dict[str, float]] = Field(
+        None, description="Detailed dictionary of acoustic deltas"
+    )
+    disclaimer: str = Field(
+        ..., description="Mandatory ethics and non-lie-detector disclaimer notice"
+    )
+
+
+class AnalysisResponse(BaseModel):
+    """Response returned by POST /analyze endpoint."""
+
+    verdict: Literal["Truthful-leaning", "Deception indicators"] = Field(
+        ..., description="Binary classification verdict"
+    )
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Model prediction confidence score (0.0 to 1.0)"
+    )
+    top_signals: List[TopSignal] = Field(
+        ...,
+        min_length=1,
+        max_length=5,
+        description="Top contributing vocal signals",
     )
     duration_seconds: Optional[float] = Field(
         None, description="Analyzed audio duration in seconds"
@@ -33,6 +62,24 @@ class AnalysisResponse(BaseModel):
     disclaimer: str = Field(
         ..., description="Ethics and non-lie-detector disclaimer notice"
     )
+
+
+class CollectSessionMetadata(BaseModel):
+    """Metadata for user-collected training session."""
+
+    speaker_id: str = "anonymous"
+    prompt_question: str = "Test question"
+    label: Literal["Truthful-leaning", "Deception indicators", "Truthful", "Deceptive"] = "Truthful"
+    consent_given: bool = True
+
+
+class DatasetStatsResponse(BaseModel):
+    """Summary statistics of user-collected training dataset."""
+
+    total_sessions: int
+    truthful_count: int
+    deceptive_count: int
+    disclaimer: str
 
 
 class HealthResponse(BaseModel):

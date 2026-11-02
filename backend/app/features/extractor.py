@@ -1,6 +1,6 @@
 """Audio feature extraction module for VoiceStress.
 
-Extracts vocal stress correlates:
+Extracts vocal stress correlates and baseline-to-test deltas:
 - Pitch (F0 mean, std, range)
 - Jitter (fundamental frequency micro-variations)
 - Shimmer (amplitude micro-variations)
@@ -27,7 +27,7 @@ from backend.app.config import TARGET_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
 
-# Ordered feature list for tabular ML model
+# Ordered feature list for individual audio clips
 FEATURE_NAMES: List[str] = [
     "pitch_f0_mean",
     "pitch_f0_std",
@@ -55,6 +55,32 @@ FEATURE_NAMES: List[str] = [
     "mfcc_11",
     "mfcc_12",
     "mfcc_13",
+]
+
+# Ordered delta feature list (test clip minus baseline clip)
+DELTA_FEATURE_NAMES: List[str] = [
+    "delta_pitch_f0_mean",
+    "delta_pitch_f0_std",
+    "delta_pitch_f0_range",
+    "delta_jitter_local",
+    "delta_shimmer_local",
+    "delta_speech_rate",
+    "delta_pause_ratio",
+    "delta_energy_variance",
+    "delta_energy_std",
+    "delta_mfcc_1",
+    "delta_mfcc_2",
+    "delta_mfcc_3",
+    "delta_mfcc_4",
+    "delta_mfcc_5",
+    "delta_mfcc_6",
+    "delta_mfcc_7",
+    "delta_mfcc_8",
+    "delta_mfcc_9",
+    "delta_mfcc_10",
+    "delta_mfcc_11",
+    "delta_mfcc_12",
+    "delta_mfcc_13",
 ]
 
 
@@ -144,15 +170,7 @@ class AudioFeatureExtractor:
         y: np.ndarray,
         duration: Optional[float] = None,
     ) -> Dict[str, float]:
-        """Extract all 26 acoustic features from audio array.
-
-        Args:
-            y: 1D mono audio signal as float32 numpy array.
-            duration: Precomputed duration in seconds (computed if None).
-
-        Returns:
-            Dictionary mapping feature names to extracted float values.
-        """
+        """Extract all 26 acoustic features from audio array."""
         if duration is None or duration <= 0:
             duration = float(len(y) / self.sample_rate)
 
@@ -166,10 +184,7 @@ class AudioFeatureExtractor:
         else:
             y_norm = y
 
-        # ------------------------------------------------------------------
         # 1. Fundamental Frequency (F0 Pitch) & Jitter via Downsampled YIN
-        # ------------------------------------------------------------------
-        # Downsample to 4 kHz for sub-second F0 tracking without precision loss
         sr_f0 = 4000
         down_factor = max(1, int(self.sample_rate / sr_f0))
         y_f0 = signal.resample_poly(y_norm, up=1, down=down_factor)
@@ -204,9 +219,7 @@ class AudioFeatureExtractor:
         else:
             jitter_local = 0.0
 
-        # ------------------------------------------------------------------
         # 2. RMS Energy & Shimmer (Amplitude micro-variations)
-        # ------------------------------------------------------------------
         rms = librosa.feature.rms(y=y_norm, frame_length=2048, hop_length=512)[0]
         energy_variance = float(np.var(rms))
         energy_std = float(np.std(rms))
@@ -219,10 +232,7 @@ class AudioFeatureExtractor:
         else:
             shimmer_local = 0.0
 
-        # ------------------------------------------------------------------
         # 3. Speech Rate & Pause Metrics
-        # ------------------------------------------------------------------
-        # Syllable / phonetic onset count
         onsets = librosa.onset.onset_detect(
             y=y_norm,
             sr=self.sample_rate,
@@ -240,14 +250,12 @@ class AudioFeatureExtractor:
             pause_total_duration = max(0.0, duration - non_silent_duration)
             pause_ratio = float(pause_total_duration / max(0.1, duration))
 
-            # Internal pauses between voiced segments
             if len(non_silent_intervals) > 1:
                 internal_pauses = [
                     (non_silent_intervals[i + 1][0] - non_silent_intervals[i][1])
                     / self.sample_rate
                     for i in range(len(non_silent_intervals) - 1)
                 ]
-                # Filter out microscopic gaps (< 100ms) to count real pauses
                 significant_pauses = [p for p in internal_pauses if p >= 0.15]
                 pause_count = float(len(significant_pauses))
                 pause_mean_duration = (
@@ -257,15 +265,12 @@ class AudioFeatureExtractor:
                 pause_count = 0.0
                 pause_mean_duration = 0.0
         else:
-            # Entire clip is below threshold
             pause_total_duration = duration
             pause_ratio = 1.0
             pause_count = 1.0
             pause_mean_duration = duration
 
-        # ------------------------------------------------------------------
         # 4. Mel-Frequency Cepstral Coefficients (13 MFCC Means)
-        # ------------------------------------------------------------------
         mfccs = librosa.feature.mfcc(
             y=y_norm,
             sr=self.sample_rate,
@@ -274,7 +279,6 @@ class AudioFeatureExtractor:
         )
         mfcc_means = np.mean(mfccs, axis=1)
 
-        # Assemble feature dict
         features: Dict[str, float] = {
             "pitch_f0_mean": pitch_f0_mean,
             "pitch_f0_std": pitch_f0_std,
@@ -300,14 +304,7 @@ class AudioFeatureExtractor:
         self,
         audio_bytes: Union[bytes, io.BytesIO, Path, str],
     ) -> Tuple[Dict[str, float], float]:
-        """Decode audio and extract acoustic feature dictionary.
-
-        Args:
-            audio_bytes: Raw audio bytes or path.
-
-        Returns:
-            Tuple of (features_dict, duration_seconds).
-        """
+        """Decode audio and extract acoustic feature dictionary."""
         y, duration = decode_audio_bytes(audio_bytes, target_sr=self.sample_rate)
         features = self.extract_features(y, duration=duration)
         return features, duration
@@ -319,6 +316,43 @@ def extract_audio_features(
     """Helper function to extract features directly from raw audio."""
     extractor = AudioFeatureExtractor()
     return extractor.extract_from_bytes(audio_data)
+
+
+def compute_delta_features(
+    baseline_features: Dict[str, float],
+    test_features: Dict[str, float],
+) -> Dict[str, float]:
+    """Compute the delta feature dictionary (test clip minus baseline clip).
+
+    Args:
+        baseline_features: Acoustic features of the neutral calibration clip.
+        test_features: Acoustic features of the target test response.
+
+    Returns:
+        Dictionary of computed delta features.
+    """
+    deltas: Dict[str, float] = {
+        "delta_pitch_f0_mean": test_features["pitch_f0_mean"] - baseline_features["pitch_f0_mean"],
+        "delta_pitch_f0_std": test_features["pitch_f0_std"] - baseline_features["pitch_f0_std"],
+        "delta_pitch_f0_range": test_features["pitch_f0_range"] - baseline_features["pitch_f0_range"],
+        "delta_jitter_local": test_features["jitter_local"] - baseline_features["jitter_local"],
+        "delta_shimmer_local": test_features["shimmer_local"] - baseline_features["shimmer_local"],
+        "delta_speech_rate": test_features["speech_rate"] - baseline_features["speech_rate"],
+        "delta_pause_ratio": test_features["pause_ratio"] - baseline_features["pause_ratio"],
+        "delta_energy_variance": test_features["energy_variance"] - baseline_features["energy_variance"],
+        "delta_energy_std": test_features["energy_std"] - baseline_features["energy_std"],
+    }
+
+    for i in range(1, 14):
+        mfcc_key = f"mfcc_{i}"
+        deltas[f"delta_mfcc_{i}"] = test_features[mfcc_key] - baseline_features[mfcc_key]
+
+    return deltas
+
+
+def delta_dict_to_vector(delta_features: Dict[str, float]) -> np.ndarray:
+    """Convert delta feature dictionary to ordered numpy vector for ML model."""
+    return np.array([delta_features[name] for name in DELTA_FEATURE_NAMES], dtype=np.float32)
 
 
 def feature_dict_to_vector(features: Dict[str, float]) -> np.ndarray:

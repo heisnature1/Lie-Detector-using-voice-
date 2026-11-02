@@ -1,58 +1,44 @@
 {
-  "accuracy": 0.9833,
-  "macro_f1": 0.9833,
+  "accuracy": 1.0,
+  "macro_f1": 1.0,
   "classes": [
-    "Low",
-    "Medium",
-    "High"
+    "Truthful-leaning",
+    "Deception indicators"
   ],
   "confusion_matrix": [
     [
-      19,
-      1,
+      30,
       0
     ],
     [
       0,
-      20,
-      0
-    ],
-    [
-      0,
-      0,
-      20
+      30
     ]
   ],
   "classification_report": {
-    "Low": {
+    "Truthful-leaning": {
       "precision": 1.0,
       "recall": 1.0,
       "f1-score": 1.0,
-      "support": 20.0
+      "support": 30.0
     },
-    "Medium": {
+    "Deception indicators": {
       "precision": 1.0,
-      "recall": 0.95,
-      "f1-score": 0.9743589743589743,
-      "support": 20.0
-    },
-    "High": {
-      "precision": 0.9523809523809523,
       "recall": 1.0,
-      "f1-score": 0.975609756097561,
-      "support": 20.0
+      "f1-score": 1.0,
+      "support": 30.0
     },
-    "accuracy": 0.9833333333333333,
+    "accuracy": 1.0,
     "macro avg": {
-      "precision": 0.9841269841269842,
-      "recall": 0.9833333333333334,
-      "f1-score": 0.9833229101521784,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
       "support": 60.0
     },
     "weighted avg": {
-      "precision": 0.9841269841269842,
-      "recall": 0.9833333333333333,
-      "f1-score": 0.9833229101521785,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
       "support": 60.0
     }
   },

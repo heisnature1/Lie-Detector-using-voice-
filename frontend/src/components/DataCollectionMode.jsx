@@ -3,7 +3,7 @@ import { Database, ShieldCheck, Check, AlertCircle, Mic, Square, Sparkles, Uploa
 import AudioVisualizer3D from "./AudioVisualizer3D";
 import Card3D from "./Card3D";
 
-const API_BASE = "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function DataCollectionMode() {
   const [hasConsent, setHasConsent] = useState(false);
@@ -36,8 +36,13 @@ export default function DataCollectionMode() {
     try {
       const res = await fetch(`${API_BASE}/api/dataset/stats`);
       if (res.ok) {
-        const data = await res.json();
-        setStats(data);
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          setStats(data);
+        } catch (e) {
+          console.warn("Stats endpoint did not return JSON:", text.slice(0, 50));
+        }
       }
     } catch (e) {
       console.warn("Could not fetch dataset stats", e);
@@ -129,10 +134,13 @@ export default function DataCollectionMode() {
     setErrorMsg("");
 
     const formData = new FormData();
+    formData.append("baseline_file", baselineBlob, "baseline.webm");
+    formData.append("test_file", testBlob, "test.webm");
     formData.append("baseline_audio", baselineBlob, "baseline.webm");
     formData.append("test_audio", testBlob, "test.webm");
     formData.append("label", label);
     formData.append("consent", "true");
+    formData.append("consent_given", "true");
     formData.append("notes", sessionNotes);
 
     try {
@@ -141,9 +149,18 @@ export default function DataCollectionMode() {
         body: formData,
       });
 
+      const rawText = await res.text();
+      let resData = {};
+      try {
+        resData = JSON.parse(rawText);
+      } catch (parseErr) {
+        throw new Error(
+          `Server returned HTTP ${res.status}. Expected JSON response from /api/dataset/collect.`
+        );
+      }
+
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Submission failed");
+        throw new Error(resData.detail || resData.message || "Submission failed");
       }
 
       setSubmitSuccess(true);
@@ -179,7 +196,7 @@ export default function DataCollectionMode() {
           <div className="bg-studio-900/80 px-4 py-2 rounded-xl border border-studio-800 flex items-center gap-4 text-xs font-mono">
             <div>
               <span className="text-studio-400 block text-[10px]">TOTAL COLLECTED</span>
-              <span className="text-white font-bold">{stats.total_collected || 0}</span>
+              <span className="text-white font-bold">{stats.total_sessions || stats.total_collected || 0}</span>
             </div>
             <div>
               <span className="text-accent-emerald block text-[10px]">TRUTHFUL</span>

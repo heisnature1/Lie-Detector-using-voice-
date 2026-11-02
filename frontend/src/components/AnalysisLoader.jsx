@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Loader2, Activity, Sparkles } from "lucide-react";
+import { Loader2, Radio, Terminal, Cpu } from "lucide-react";
 
-const STEPS = [
-  "Decoding audio waveform and validating duration...",
-  "Extracting fundamental frequency (F0), jitter & shimmer...",
-  "Measuring syllable pacing, pauses & 13 MFCC spectral coefficients...",
-  "Evaluating random forest model & compiling driving signals...",
+const DSP_STEPS = [
+  "DECODING AUDIO WAVEFORM & ALIGNING CALIBRATION CHANNELS...",
+  "EXTRACTING F0 PITCH CONTOURS & MICRO-JITTER VECTORS...",
+  "COMPUTING SHIMMER PERTURBATION & 13 MFCC SPECTRAL TIMBRE...",
+  "CALCULATING DIFFERENTIAL ACOUSTIC DELTAS (TEST − BASELINE)...",
+  "EXECUTING RANDOM FOREST INFERENCE & COMPILING TOP SIGNALS...",
 ];
 
 export default function AnalysisLoader() {
@@ -13,55 +14,61 @@ export default function AnalysisLoader() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentStep((prev) => (prev < STEPS.length - 1 ? prev + 1 : prev));
-    }, 800);
+      setCurrentStep((prev) => (prev < DSP_STEPS.length - 1 ? prev + 1 : prev));
+    }, 650);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-2xl backdrop-blur-md">
-      {/* Animated Waveform Visualizer */}
-      <div className="flex items-center justify-center space-x-1.5 h-16 mb-8">
-        {[40, 70, 30, 90, 60, 100, 45, 80, 50, 95, 35, 75, 40].map((height, i) => (
-          <div
-            key={i}
-            className="w-1.5 rounded-full bg-gradient-to-t from-sky-600 to-indigo-400"
-            style={{
-              height: `${height}%`,
-              animation: `wave 1.2s ease-in-out infinite`,
-              animationDelay: `${(i * 0.1).toFixed(1)}s`,
-            }}
-          />
-        ))}
+    <div className="bg-dark-900/95 border border-dark-700 rounded-3xl p-8 sm:p-12 text-center max-w-xl mx-auto shadow-2xl relative overflow-hidden backdrop-blur-2xl animate-fade-in-up">
+      {/* Subtle Scanline Overlay */}
+      <div className="absolute inset-0 scanline-overlay pointer-events-none opacity-20" />
+
+      {/* High-Tech Spectral Waterfall / Radar Scope */}
+      <div className="relative w-28 h-28 mx-auto mb-8 flex items-center justify-center">
+        {/* Radar Ring 1 */}
+        <div className="absolute inset-0 rounded-full border border-dark-700" />
+        <div className="absolute inset-3 rounded-full border border-neon-mint/20 animate-ping opacity-30" />
+        <div className="absolute inset-6 rounded-full border border-dark-700" />
+        
+        {/* Radar Sweep Line */}
+        <div className="absolute inset-0 rounded-full overflow-hidden animate-radar-sweep">
+          <div className="w-1/2 h-1/2 bg-gradient-to-br from-neon-mint/40 to-transparent origin-bottom-right" />
+        </div>
+
+        {/* Center DSP Core Icon */}
+        <div className="w-12 h-12 rounded-xl bg-dark-850 border border-dark-700 flex items-center justify-center relative z-10 shadow-lg">
+          <Cpu className="w-6 h-6 text-neon-mint animate-pulse" />
+        </div>
       </div>
 
-      <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold mb-3">
-        <Sparkles className="w-3.5 h-3.5 animate-spin" />
-        <span>Processing Audio Analysis</span>
+      <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-neon-mint/10 border border-neon-mint/30 text-neon-mint text-[11px] font-mono font-bold mb-3">
+        <Radio className="w-3.5 h-3.5 animate-pulse" />
+        <span>DSP DELTA ENGINE RUNNING</span>
       </div>
 
-      <h3 className="text-xl sm:text-2xl font-bold text-white mb-2">
-        Analyzing Vocal Stress Indicators
+      <h3 className="text-xl sm:text-2xl font-extrabold text-white mb-2 font-mono tracking-tight">
+        COMPUTING VOCAL DELTA PROFILE
       </h3>
 
-      <p className="text-sm text-slate-400 max-w-md mx-auto mb-6 h-6 transition-all duration-300">
-        {STEPS[currentStep]}
+      <p className="text-xs font-mono text-slate-300 max-w-md mx-auto mb-6 h-6 transition-all duration-300">
+        &gt; {DSP_STEPS[currentStep]}
       </p>
 
-      {/* Progress step indicators */}
-      <div className="grid grid-cols-4 gap-2 max-w-xs mx-auto">
-        {STEPS.map((_, i) => (
+      {/* Progress Bars */}
+      <div className="grid grid-cols-5 gap-1.5 max-w-xs mx-auto">
+        {DSP_STEPS.map((_, i) => (
           <div
             key={i}
-            className={`h-1.5 rounded-full transition-all duration-500 ${
-              i <= currentStep ? "bg-sky-500" : "bg-slate-800"
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i <= currentStep ? "bg-neon-mint shadow-[0_0_8px_rgba(0,245,155,0.7)]" : "bg-dark-800"
             }`}
           />
         ))}
       </div>
 
-      <p className="text-xs text-slate-400 mt-6">
-        Average processing time &lt; 2 seconds for a 30s voice clip.
+      <p className="text-[11px] font-mono text-dark-500 mt-6">
+        TELEMETRY: LIBROSA 26-FEATURE EXTRACTION // RF CALIBRATED INFERENCE
       </p>
     </div>
   );

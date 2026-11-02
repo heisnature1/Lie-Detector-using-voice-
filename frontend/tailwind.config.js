@@ -7,31 +7,62 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: "#f0f9ff",
-          100: "#e0f2fe",
-          200: "#bae6fd",
-          500: "#0284c7",
-          600: "#0369a1",
-          700: "#075985",
-          900: "#0c4a6e",
+        dark: {
+          950: "#07080b",
+          900: "#0d0f14",
+          850: "#13161c",
+          800: "#1a1e27",
+          700: "#262b37",
+          600: "#373e4f",
+          500: "#4f586d",
         },
-        stress: {
-          low: "#10b981",
-          medium: "#f59e0b",
-          high: "#ef4444",
-        }
+        neon: {
+          mint: "#00f59b",
+          mintDark: "#059669",
+          amber: "#ffb703",
+          coral: "#ff3366",
+          cyan: "#00e5ff",
+          purple: "#a855f7",
+        },
+      },
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       animation: {
-        'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'wave': 'wave 1.5s ease-in-out infinite',
+        'scan': 'scan 3s linear infinite',
+        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+        'ripple': 'ripple 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite',
+        'bar-glow': 'barGlow 1.2s ease-in-out infinite alternate',
+        'fade-in-up': 'fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'radar-sweep': 'radarSweep 4s linear infinite',
       },
       keyframes: {
-        wave: {
-          '0%, 100%': { transform: 'scaleY(0.3)' },
-          '50%': { transform: 'scaleY(1.0)' },
-        }
-      }
+        scan: {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(1000%)' },
+        },
+        pulseGlow: {
+          '0%, 100%': { opacity: '0.4', filter: 'drop-shadow(0 0 8px rgba(0,245,155,0.4))' },
+          '50%': { opacity: '1', filter: 'drop-shadow(0 0 20px rgba(0,245,155,0.8))' },
+        },
+        ripple: {
+          '0%': { transform: 'scale(0.95)', opacity: '1' },
+          '100%': { transform: 'scale(1.8)', opacity: '0' },
+        },
+        barGlow: {
+          '0%': { opacity: '0.6', transform: 'scaleY(0.4)' },
+          '100%': { opacity: '1', transform: 'scaleY(1)' },
+        },
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        radarSweep: {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+      },
     },
   },
   plugins: [],

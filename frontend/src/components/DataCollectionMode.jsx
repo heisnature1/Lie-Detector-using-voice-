@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Database, CheckCircle2, AlertCircle, Mic, Square, Sparkles } from "lucide-react";
+import { Database, CheckCircle2, AlertCircle, Mic, Square, Sparkles, Terminal } from "lucide-react";
 import { submitDatasetSession, fetchDatasetStats } from "../services/api";
 
 export default function DataCollectionMode() {
@@ -61,7 +61,7 @@ export default function DataCollectionMode() {
       };
 
       mediaRecorderRef.current = recorder;
-      recorder.start(250);
+      recorder.start(200);
       setIsRecording(true);
 
       const startTime = Date.now();
@@ -135,115 +135,119 @@ export default function DataCollectionMode() {
   const isMinDurationMet = duration >= 5.0;
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-            <Database className="w-5 h-5" />
+    <div className="bg-dark-900/90 border border-dark-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 backdrop-blur-xl">
+      {/* Studio Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-dark-800 pb-5">
+        <div className="flex items-center space-x-3.5">
+          <div className="w-10 h-10 rounded-xl bg-dark-850 border border-dark-700 flex items-center justify-center text-neon-purple shadow-lg">
+            <Database className="w-5 h-5 text-neon-purple" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Data Collection Studio</h2>
-            <p className="text-xs text-slate-400">
-              Record labeled Truth / Lie calibrated samples to build your own custom ML dataset
+            <h2 className="text-lg sm:text-xl font-extrabold text-white font-mono">DATA COLLECTION STUDIO</h2>
+            <p className="text-xs font-mono text-dark-500">
+              Record consented Truth / Lie delta samples to train your custom model
             </p>
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 bg-slate-950 px-4 py-2 rounded-xl border border-slate-800 text-xs">
+        {/* Counter Badge */}
+        <div className="flex items-center space-x-3 bg-dark-950 px-4 py-2.5 rounded-2xl border border-dark-800 text-xs font-mono">
           <div>
-            <span className="text-slate-400 block text-[10px] uppercase font-semibold">Total Collected</span>
-            <span className="font-mono font-bold text-purple-400 text-sm">{stats.total_sessions} sessions</span>
+            <span className="text-dark-500 block text-[10px] uppercase font-bold">TOTAL DATASET</span>
+            <span className="font-extrabold text-neon-purple text-sm">{stats.total_sessions} SESSIONS</span>
           </div>
-          <div className="border-l border-slate-800 pl-3">
-            <span className="text-emerald-400 font-mono font-medium">{stats.truthful_count} Truth</span>
-            <span className="text-slate-500 mx-1">/</span>
-            <span className="text-rose-400 font-mono font-medium">{stats.deceptive_count} Lie</span>
+          <div className="border-l border-dark-800 pl-3">
+            <span className="text-neon-mint font-bold">{stats.truthful_count} Truth</span>
+            <span className="text-dark-600 mx-1.5">/</span>
+            <span className="text-neon-coral font-bold">{stats.deceptive_count} Lie</span>
           </div>
         </div>
       </div>
 
       {statusMessage && (
         <div
-          className={`p-4 rounded-2xl flex items-center gap-3 text-sm border ${
+          className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-mono border ${
             statusMessage.type === "success"
-              ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300"
-              : "bg-rose-950/40 border-rose-500/30 text-rose-300"
+              ? "bg-neon-mint/10 border-neon-mint/30 text-neon-mint"
+              : "bg-neon-coral/10 border-neon-coral/30 text-neon-coral"
           }`}
         >
           {statusMessage.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0" />
           )}
           <p>{statusMessage.text}</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Metadata Inputs */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-            Speaker Identifier
+          <label className="block text-[11px] font-bold text-dark-500 uppercase tracking-wider mb-1.5">
+            SPEAKER ID
           </label>
           <input
             type="text"
             value={speakerId}
             onChange={(e) => setSpeakerId(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+            className="w-full px-3.5 py-2.5 bg-dark-950 border border-dark-800 rounded-xl text-xs text-white focus:outline-none focus:border-neon-purple font-mono"
             placeholder="e.g. participant_01"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-            Ground Truth Label
+          <label className="block text-[11px] font-bold text-dark-500 uppercase tracking-wider mb-1.5">
+            GROUND TRUTH LABEL
           </label>
-          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <div className="flex bg-dark-950 p-1 rounded-xl border border-dark-800">
             <button
               onClick={() => setLabel("Truthful")}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
                 label === "Truthful"
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-neon-mint text-dark-950 shadow-md"
+                  : "text-dark-500 hover:text-white"
               }`}
             >
               Truthful
             </button>
             <button
               onClick={() => setLabel("Deceptive")}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-mono transition-all ${
                 label === "Deceptive"
-                  ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-neon-coral text-white shadow-md"
+                  : "text-dark-500 hover:text-white"
               }`}
             >
-              Deceptive (Lie)
+              Deceptive
             </button>
           </div>
         </div>
 
         <div className="sm:col-span-1">
-          <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-            Inquiry Prompt
+          <label className="block text-[11px] font-bold text-dark-500 uppercase tracking-wider mb-1.5">
+            INQUIRY PROMPT
           </label>
           <input
             type="text"
             value={promptQuestion}
             onChange={(e) => setPromptQuestion(e.target.value)}
-            className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+            className="w-full px-3.5 py-2.5 bg-dark-950 border border-dark-800 rounded-xl text-xs text-white focus:outline-none focus:border-neon-purple font-mono"
           />
         </div>
       </div>
 
-      <div className="p-5 bg-slate-950 rounded-2xl border border-slate-800 space-y-4">
+      {/* Recording Steps */}
+      <div className="p-5 bg-dark-950 rounded-2xl border border-dark-800 space-y-4 font-mono">
         <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-slate-300">
             {step === "baseline"
-              ? "1. Record Calibration Baseline (Neutral voice, ~10-15s)"
+              ? "> PHASE 1: RECORD CALIBRATION BASELINE (~10-15s)"
               : step === "test"
-              ? `2. Record ${label} Response Statement (5-60s)`
-              : "3. Ready to Save Calibrated Sample"}
+              ? `> PHASE 2: RECORD ${label.toUpperCase()} RESPONSE (5-60s)`
+              : "> PHASE 3: SAMPLE CAPTURED // READY TO STORE"}
           </span>
-          <span className="font-mono text-slate-400">{duration.toFixed(1)}s / 60s</span>
+          <span className="text-dark-500">{duration.toFixed(1)}s / 60s</span>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-4 py-2">
@@ -251,28 +255,28 @@ export default function DataCollectionMode() {
             !isRecording ? (
               <button
                 onClick={startRecording}
-                className="flex items-center space-x-2 px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-purple-600/25 transition-all"
+                className="flex items-center space-x-2 px-6 py-3.5 bg-neon-purple hover:bg-neon-purple/90 text-white font-mono font-bold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-neon-purple/20 transition-all transform hover:scale-[1.02] active:scale-95"
               >
                 <Mic className="w-4 h-4" />
                 <span>
-                  {step === "baseline" ? "Record Calibration Clip" : `Record ${label} Clip`}
+                  {step === "baseline" ? "CAPTURE CALIBRATION" : `CAPTURE ${label.toUpperCase()} CLIP`}
                 </span>
               </button>
             ) : (
               <button
                 onClick={stopRecording}
                 disabled={!isMinDurationMet}
-                className={`flex items-center space-x-2 px-5 py-3 font-bold rounded-xl text-sm transition-all ${
+                className={`flex items-center space-x-2 px-6 py-3.5 font-mono font-bold rounded-xl text-xs uppercase tracking-wider transition-all ${
                   isMinDurationMet
-                    ? "bg-rose-600 hover:bg-rose-500 text-white shadow-lg cursor-pointer"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
+                    ? "bg-neon-coral text-white shadow-lg cursor-pointer transform hover:scale-[1.02] active:scale-95"
+                    : "bg-dark-800 text-dark-500 cursor-not-allowed border border-dark-700"
                 }`}
               >
                 <Square className="w-4 h-4 fill-current" />
                 <span>
                   {isMinDurationMet
-                    ? "Stop Recording"
-                    : `Keep speaking (${(5 - duration).toFixed(0)}s left)`}
+                    ? "STOP CAPTURE"
+                    : `SPEAKING... (${(5 - duration).toFixed(0)}s LEFT)`}
                 </span>
               </button>
             )
@@ -280,34 +284,35 @@ export default function DataCollectionMode() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleReset}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+                className="px-4 py-3 bg-dark-850 hover:bg-dark-800 text-dark-500 hover:text-white rounded-xl text-xs font-mono font-bold"
               >
-                Cancel & Re-record
+                DISCARD & RETRY
               </button>
 
               <button
                 onClick={handleSaveToDataset}
                 disabled={isSubmitting || !consentGiven}
-                className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm shadow-lg shadow-purple-600/30 transition-all disabled:opacity-50"
+                className="flex items-center space-x-2 px-7 py-3 bg-neon-mint hover:bg-neon-mint/90 text-dark-950 font-mono font-bold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-neon-mint/20 transition-all disabled:opacity-50 transform hover:scale-[1.02] active:scale-95"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>{isSubmitting ? "Saving..." : `Save '${label}' Sample to Dataset`}</span>
+                <span>{isSubmitting ? "STORING..." : `STORE '${label.toUpperCase()}' SAMPLE`}</span>
               </button>
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex items-start space-x-3 p-3 bg-slate-950/60 rounded-xl border border-slate-800/80">
+      {/* Informed Consent Checkbox */}
+      <div className="flex items-start space-x-3 p-3.5 bg-dark-950/60 rounded-xl border border-dark-800 font-mono text-xs">
         <input
           type="checkbox"
           id="consentCheckbox"
           checked={consentGiven}
           onChange={(e) => setConsentGiven(e.target.checked)}
-          className="mt-1 w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-slate-900 border-slate-700"
+          className="mt-0.5 w-4 h-4 rounded text-neon-purple focus:ring-neon-purple bg-dark-900 border-dark-700"
         />
-        <label htmlFor="consentCheckbox" className="text-xs text-slate-300 leading-relaxed cursor-pointer">
-          <strong className="text-slate-200">Informed Research Consent:</strong> I confirm this voice sample was recorded with the speaker's knowledge and consent strictly for academic acoustic modeling and calibration research.
+        <label htmlFor="consentCheckbox" className="text-dark-500 leading-relaxed cursor-pointer font-sans text-xs">
+          <strong className="text-slate-300 font-mono">INFORMED RESEARCH CONSENT:</strong> I confirm this voice sample was recorded with the speaker's informed consent strictly for acoustic modeling and calibration training.
         </label>
       </div>
     </div>

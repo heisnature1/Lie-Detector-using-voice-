@@ -1,9 +1,6 @@
 import React, { useState } from "react";
-import { Sparkles, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertTriangle, Terminal } from "lucide-react";
 
-/**
- * Helper to encode audio buffer to 16-bit PCM WAV Blob in browser.
- */
 function audioBufferToWavBlob(buffer) {
   const numChannels = 1;
   const sampleRate = buffer.sampleRate;
@@ -97,47 +94,47 @@ export default function SampleTester({ onSessionReady, isAnalyzing }) {
   };
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 text-center mt-6">
-      <div className="flex items-center justify-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-        <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-        <span>One-Click Calibrated Test Sessions (No Mic Required)</span>
+    <div className="bg-dark-900/60 border border-dark-800 rounded-3xl p-6 text-center mt-6 backdrop-blur-md">
+      <div className="flex items-center justify-center space-x-2 text-xs font-mono font-bold text-dark-500 uppercase tracking-widest mb-1.5">
+        <Terminal className="w-3.5 h-3.5 text-neon-cyan" />
+        <span>HARDWARE DEMO PRESETS // ONE-CLICK EVALUATION</span>
       </div>
-      <p className="text-xs text-slate-400 mb-4 max-w-lg mx-auto">
-        Test delta feature extraction instantly using pre-calibrated baseline and statement session pairs:
+      <p className="text-xs font-mono text-dark-500 mb-5 max-w-lg mx-auto">
+        Test calibrated delta feature modeling using pre-computed synthetic session pairs:
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-w-xl mx-auto">
         <button
           onClick={() => generateAndTest("Truthful")}
           disabled={isAnalyzing}
-          className="p-3.5 bg-emerald-950/40 hover:bg-emerald-950/70 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
+          className="p-4 bg-dark-850 hover:bg-dark-800 border border-neon-mint/30 hover:border-neon-mint/60 rounded-2xl text-left transition-all group disabled:opacity-50 relative overflow-hidden transform hover:scale-[1.02] active:scale-95 shadow-lg"
         >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Truthful-Leaning Session
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-mono font-bold text-neon-mint flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              PRESET 01: TRUTHFUL-LEANING
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">10s base + 8s test</span>
+            <span className="text-[10px] text-dark-500 font-mono">10s + 8s</span>
           </div>
-          <p className="text-[11px] text-slate-300 leading-snug">
-            Steady fundamental frequency (&Delta;F0 &approx; 0 Hz), minimal jitter delta, consistent breath pacing.
+          <p className="text-xs text-slate-300 leading-snug font-sans">
+            Minimal pitch delta (&Delta;F0 &approx; 0 Hz), steady vocal shimmer, natural breath intervals.
           </p>
         </button>
 
         <button
           onClick={() => generateAndTest("Deceptive")}
           disabled={isAnalyzing}
-          className="p-3.5 bg-rose-950/40 hover:bg-rose-950/70 border border-rose-500/30 hover:border-rose-500/60 rounded-xl text-left transition-all group disabled:opacity-50"
+          className="p-4 bg-dark-850 hover:bg-dark-800 border border-neon-coral/30 hover:border-neon-coral/60 rounded-2xl text-left transition-all group disabled:opacity-50 relative overflow-hidden transform hover:scale-[1.02] active:scale-95 shadow-lg"
         >
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Deception Indicators Session
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-mono font-bold text-neon-coral flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" />
+              PRESET 02: DECEPTION INDICATORS
             </span>
-            <span className="text-[10px] text-slate-400 font-mono">10s base + 8s test</span>
+            <span className="text-[10px] text-dark-500 font-mono">10s + 8s</span>
           </div>
-          <p className="text-[11px] text-slate-300 leading-snug">
-            Elevated pitch delta (&Delta;F0 &gt; +50 Hz), high jitter perturbation, hurried speech rate.
+          <p className="text-xs text-slate-300 leading-snug font-sans">
+            Elevated pitch delta (&Delta;F0 &gt; +50 Hz), high jitter micro-tremors, accelerated pacing.
           </p>
         </button>
       </div>

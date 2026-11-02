@@ -128,6 +128,19 @@ docker-compose up --build
 
 ---
 
+### 3. Hosting on Vercel (Frontend) + Dedicated Container (Backend)
+
+1. **Frontend on Vercel**:
+   - Set Root Directory to `frontend` (or deploy from repository root using the included `vercel.json`).
+   - Framework preset: `Vite`.
+   - Build Command: `npm run build`.
+   - Output Directory: `dist`.
+2. **Backend**:
+   - Host on Render, Railway, Fly.io, or AWS using the provided `Dockerfile.backend`.
+   - Configure proxy rewrites in `frontend/vercel.json` or environment variables to point to your deployed backend URL.
+
+---
+
 ## 🧪 Running Tests
 
 Run the full pytest suite (14 unit & integration tests):
